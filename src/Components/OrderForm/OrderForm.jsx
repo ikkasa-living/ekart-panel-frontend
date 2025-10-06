@@ -1,7 +1,48 @@
 import React, { useState, useEffect } from "react";
+import Select from "react-select";
 import { MdDelete } from "react-icons/md";
 import { toast } from "react-toastify";
 import "./OrderForm.css";
+
+const stateOptions = [
+  { value: "Andhra Pradesh", label: "Andhra Pradesh" },
+  { value: "Arunachal Pradesh", label: "Arunachal Pradesh" },
+  { value: "Assam", label: "Assam" },
+  { value: "Bihar", label: "Bihar" },
+  { value: "Chhattisgarh", label: "Chhattisgarh" },
+  { value: "Goa", label: "Goa" },
+  { value: "Gujarat", label: "Gujarat" },
+  { value: "Haryana", label: "Haryana" },
+  { value: "Himachal Pradesh", label: "Himachal Pradesh" },
+  { value: "Jharkhand", label: "Jharkhand" },
+  { value: "Karnataka", label: "Karnataka" },
+  { value: "Kerala", label: "Kerala" },
+  { value: "Madhya Pradesh", label: "Madhya Pradesh" },
+  { value: "Maharashtra", label: "Maharashtra" },
+  { value: "Manipur", label: "Manipur" },
+  { value: "Meghalaya", label: "Meghalaya" },
+  { value: "Mizoram", label: "Mizoram" },
+  { value: "Nagaland", label: "Nagaland" },
+  { value: "Odisha", label: "Odisha" },
+  { value: "Punjab", label: "Punjab" },
+  { value: "Rajasthan", label: "Rajasthan" },
+  { value: "Sikkim", label: "Sikkim" },
+  { value: "Tamil Nadu", label: "Tamil Nadu" },
+  { value: "Telangana", label: "Telangana" },
+  { value: "Tripura", label: "Tripura" },
+  { value: "Uttar Pradesh", label: "Uttar Pradesh" },
+  { value: "Uttarakhand", label: "Uttarakhand" },
+  { value: "West Bengal", label: "West Bengal" },
+  { value: "Andaman and Nicobar Islands", label: "Andaman and Nicobar Islands" },
+  { value: "Chandigarh", label: "Chandigarh" },
+  { value: "Dadra and Nagar Haveli and Daman and Diu", label: "Dadra and Nagar Haveli and Daman and Diu" },
+  { value: "Delhi", label: "Delhi" },
+  { value: "Jammu and Kashmir", label: "Jammu and Kashmir" },
+  { value: "Ladakh", label: "Ladakh" },
+  { value: "Lakshadweep", label: "Lakshadweep" },
+  { value: "Puducherry", label: "Puducherry" }
+];
+
 
 // All fields reflected from backend schema!
 const initialOrder = {
@@ -179,11 +220,11 @@ export default function OrderForm({ onSave, onClose, editData }) {
           <input name="shopifyId" value={order.shopifyId} onChange={handleChange} />
         </div>
         <div>
-          <label>Order ID:</label>
+          <label>Order ID(Required):</label>
           <input name="orderId" value={order.orderId} onChange={handleChange} required />
         </div>
         <div>
-          <label>Order Date:</label>
+          <label>Order Date(Required):</label>
           <input type="date" name="orderDate" value={order.orderDate} onChange={handleChange} required />
         </div>
         <div>
@@ -191,35 +232,44 @@ export default function OrderForm({ onSave, onClose, editData }) {
           <input name="awb" value={order.awb} onChange={handleChange} />
         </div>
         <div>
-          <label>Customer Name:</label>
+          <label>Customer Name(Required):</label>
           <input name="customerName" value={order.customerName} onChange={handleChange} required />
         </div>
         <div>
-          <label>Phone:</label>
+          <label>Phone(Required):</label>
           <input name="customerPhone" value={order.customerPhone} onChange={handleChange} required />
         </div>
         <div>
-          <label>Email:</label>
+          <label>Email(Required):</label>
           <input type="email" name="customerEmail" value={order.customerEmail} onChange={handleChange} />
         </div>
         <div>
-          <label>Address:</label>
+          <label>Address(Required):</label>
           <textarea name="customerAddress" value={order.customerAddress} onChange={handleChange} rows="2" />
         </div>
         <div>
-          <label>City:</label>
+          <label>City(Required):</label>
           <input name="city" value={order.city} onChange={handleChange} />
         </div>
         <div>
-          <label>State:</label>
-          <input name="state" value={order.state} onChange={handleChange} />
+          <label>State (Required) :</label>
+          <Select
+            options={stateOptions}
+            value={stateOptions.find((opt) => opt.value === order.state) || null}
+            onChange={(selected) =>
+              setOrder({ ...order, state: selected ? selected.value : "" })
+            }
+            isClearable
+            isSearchable
+            placeholder="Select or type state"
+          />
         </div>
         <div>
-          <label>Pincode:</label>
+          <label>Pincode(Required):</label>
           <input name="pincode" value={order.pincode} onChange={handleChange} />
         </div>
       </div>
-      <h3>Products</h3>
+      <h3>Products(Required)</h3>
       {order.products.map((p, i) => (
         <div key={i} className="product-row">
           <input
@@ -260,10 +310,6 @@ export default function OrderForm({ onSave, onClose, editData }) {
         <div>
           <label>Height (cm):</label>
           <input name="height" type="number" value={order.height} onChange={handleChange} min={0} />
-        </div>
-        <div>
-          <label>Volumetric Weight (Kg):</label>
-          <input name="volumetricWeight" type="number" value={order.volumetricWeight} onChange={handleChange} min={0} />
         </div>
         <div>
           <label>Amount:</label>
@@ -338,36 +384,8 @@ export default function OrderForm({ onSave, onClose, editData }) {
           <input name="invoiceReference" value={order.invoiceReference} onChange={handleChange} />
         </div>
         <div>
-          <label>Status:</label>
-          <select name="status" value={order.status} onChange={handleChange}>
-            <option value="New">New</option>
-            <option value="PENDING">PENDING</option>
-            <option value="IN_TRANSIT">IN_TRANSIT</option>
-            <option value="DELIVERED">DELIVERED</option>
-            <option value="RETURNED">RETURNED</option>
-            <option value="CANCELLED">CANCELLED</option>
-          </select>
+          <label>Status: New</label>
         </div>
-      </div>
-      <h3>Return Tracking</h3>
-      <div className="form-grid">
-        <div>
-          <label>Current Status:</label>
-          <input
-            name="currentStatus"
-            value={order.returnTracking.currentStatus}
-            onChange={handleTrackingChange}
-          />
-        </div>
-        <div>
-          <label>Ekart Tracking ID:</label>
-          <input
-            name="ekartTrackingId"
-            value={order.returnTracking.ekartTrackingId}
-            onChange={handleTrackingChange}
-          />
-        </div>
-        {/* History is array - can display via extra modal/table if needed! */}
       </div>
       <button className="btn" type="submit">{editData ? "Update Order" : "Save Order"}</button>
     </form>

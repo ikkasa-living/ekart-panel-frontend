@@ -16,8 +16,8 @@ export default function StatusTabs({ selectedStatus, setSelectedStatus, statusCo
           className={`status-tab ${selectedStatus === status.key ? "active" : ""}`}
           onClick={() => setSelectedStatus(status.key)}
           style={{
-            borderBottom: selectedStatus === status.key ? `3px solid ${status.color}` : 'none',
-            color: selectedStatus === status.key ? status.color : '#666'
+            borderBottom: selectedStatus === status.key ? `3px solid ${status.color}` : "none",
+            color: selectedStatus === status.key ? status.color : "#666",
           }}
         >
           <span className="status-label">{status.label}</span>
