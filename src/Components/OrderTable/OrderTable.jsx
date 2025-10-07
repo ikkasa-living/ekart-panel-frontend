@@ -449,7 +449,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
               <th>Pickup State</th>
               <th>Pickup Pincode</th>
               {/* New Warehouse Address column */}
-              <th>Warehouse Address</th>
+              <th>Destination Address</th>
               <th>GSTIN Number</th>
               <th>HSN Code</th>
               <th>Invoice Reference</th>
@@ -475,8 +475,11 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                 </td>
                 <td>{order.awb || "-"}</td>
                 <td>
-                  <strong>#{order.orderId}</strong>
-                </td>
+                <strong>
+                    {order.orderId.startsWith("#") ? order.orderId : `#${order.orderId}`}
+                </strong>
+                </td>
+
                 <td>{formatDate(order.orderDate)}</td>
                 <td>
                   <div className="customer-details">
