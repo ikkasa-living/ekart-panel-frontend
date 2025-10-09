@@ -41,15 +41,14 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
   }, []);
 
   const updateReturnQuantity = (orderId, productIdx, quantity) => {
-  setSelectedReturnQuantities(prev => ({
-    ...prev,
-    [orderId]: {
-      ...(prev[orderId] || {}),
-      [productIdx]: quantity
-    }
-  }));
-};
-
+    setSelectedReturnQuantities(prev => ({
+      ...prev,
+      [orderId]: {
+        ...(prev[orderId] || {}),
+        [productIdx]: quantity
+      }
+    }));
+  };
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
@@ -71,7 +70,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     });
   };
 
-  // >>>> Sort localOrders so CSV (any products[].imageUrl) orders show at top <<<<<<
+  // Sort localOrders so CSV (any products[].imageUrl) orders show at top
   const sortedOrders = [...localOrders].sort((a, b) => {
     const aHasCSV = a.products?.some(p => p.imageUrl);
     const bHasCSV = b.products?.some(p => p.imageUrl);
@@ -110,33 +109,125 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     });
   };
 
+  // Enhanced tracking refresh function
   const refreshTracking = async (orderId) => {
     try {
-      const res = await axios.get(`${API_URL}/api/ekart/tracking/${orderId}`);
+      setLocalOrders((prev) =>
+        prev.map((o) =>
+          o.orderId === orderId
+            ? { ...o, trackingLoading: true }
+            : o
+        )
+      );
+
+      // Use the correct tracking endpoint from your backend
+      const res = await axios.get(`${API_URL}/api/ekart/track/${orderId}`);
+      
       if (res.data.success) {
         setLocalOrders((prev) =>
           prev.map((o) =>
             o.orderId === orderId
-              ? { ...o, returnTracking: res.data.tracking }
+              ? { 
+                  ...o, 
+                  returnTracking: res.data.order,
+                  trackingLoading: false 
+                }
               : o
           )
         );
+        
         if (onOrderUpdate) {
           onOrderUpdate();
         }
         toast.success("✅ Tracking status updated successfully");
       } else {
         toast.error(res.data.message || "Failed to refresh tracking");
+        setLocalOrders((prev) =>
+          prev.map((o) =>
+            o.orderId === orderId
+              ? { ...o, trackingLoading: false }
+              : o
+          )
+        );
       }
     } catch (err) {
       console.error("Error refreshing tracking:", err);
       toast.error("❌ Error refreshing tracking status");
+      setLocalOrders((prev) =>
+        prev.map((o) =>
+          o.orderId === orderId
+            ? { ...o, trackingLoading: false }
+            : o
+        )
+      );
     }
   };
 
-  
+  // New bulk tracking refresh functionality
+  const handleBulkTrackingRefresh = async () => {
+    const ordersWithTracking = localOrders.filter(order => 
+      order.returnTracking?.ekartTrackingId && 
+      selectedOrderIds.includes(order._id)
+    );
 
-  // ======= IMAGE UPLOAD (with preview for verification) =========
+    if (ordersWithTracking.length === 0) {
+      toast.warning("⚠️ No orders with tracking IDs selected");
+      return;
+    }
+
+    try {
+      setLoadingReturnId("bulk-tracking");
+      
+      const trackingIds = ordersWithTracking.map(order => order.returnTracking.ekartTrackingId);
+      
+      const response = await axios.post(`${API_URL}/api/ekart/track/bulk`, {
+        trackingIds: trackingIds
+      });
+
+      if (response.data.success) {
+        const trackingData = response.data.trackingData;
+        
+        setLocalOrders((prev) =>
+          prev.map((order) => {
+            if (order.returnTracking?.ekartTrackingId && trackingData[order.returnTracking.ekartTrackingId]) {
+              const shipmentData = trackingData[order.returnTracking.ekartTrackingId];
+              const latestHistory = shipmentData.history?.[0];
+              
+              return {
+                ...order,
+                returnTracking: {
+                  ...order.returnTracking,
+                  currentStatus: latestHistory?.status || order.returnTracking.currentStatus,
+                  lastUpdated: new Date().toISOString(),
+                  fullTrackingData: shipmentData,
+                  history: [
+                    ...(order.returnTracking.history || []),
+                    {
+                      status: latestHistory?.status || "Updated",
+                      timestamp: new Date().toISOString(),
+                      description: latestHistory?.public_description || "Bulk tracking update",
+                      city: latestHistory?.city,
+                      hubName: latestHistory?.hub_name
+                    }
+                  ]
+                }
+              };
+            }
+            return order;
+          })
+        );
+        
+        toast.success(`✅ Tracking updated for ${ordersWithTracking.length} orders`);
+      }
+    } catch (error) {
+      console.error("Bulk tracking error:", error);
+      toast.error("❌ Bulk tracking update failed");
+    } finally {
+      setLoadingReturnId(null);
+    }
+  };
+
+  // IMAGE UPLOAD (with preview for verification) - unchanged
   const handleFileUpload = async (file, orderId, productIndex) => {
     try {
       // 1. Generate preview for immediate verification
@@ -221,7 +312,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             smart_checks: item.smart_checks || [],
             uploadedImageUrl: item.uploadedImageUrl || "", 
         }));
-
 
       const payload = {
         shopifyId: order.shopifyId,
@@ -447,7 +537,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
   return (
     <>
-      <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "12px" }}>
+      {/* Enhanced bulk actions with tracking */}
+      <div style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
         <button
           className="btn bulk-return-btn"
           onClick={handleBulkReturn}
@@ -463,6 +554,23 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         >
           {loadingReturnId === "bulk" ? "⏳ Processing..." : `🔄 Return Selected Orders (${selectedOrderIds.length})`}
         </button>
+        
+        <button
+          className="btn bulk-tracking-btn"
+          onClick={handleBulkTrackingRefresh}
+          disabled={selectedOrderIds.length === 0 || loadingReturnId === "bulk-tracking"}
+          style={{
+            backgroundColor: selectedOrderIds.length > 0 ? "#059669" : "#9ca3af",
+            color: "white",
+            padding: "8px 16px",
+            borderRadius: "6px",
+            border: "none",
+            cursor: selectedOrderIds.length > 0 ? "pointer" : "not-allowed"
+          }}
+        >
+          {loadingReturnId === "bulk-tracking" ? "⏳ Updating..." : `📍 Refresh Tracking (${selectedOrderIds.length})`}
+        </button>
+        
         {selectedOrderIds.length > 0 && (
           <span style={{ color: "#666", fontSize: "14px" }}>
             {selectedOrderIds.length} orders selected
@@ -631,6 +739,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                 <td>{order.serviceTier || "-"}</td>
                 <td>{order.category || "-"}</td>
                 <td>{order.unitPrice ? `₹${order.unitPrice}` : "-"}</td>
+                {/* Enhanced Status & Tracking Cell */}
                 <td className="status-tracking-cell">
                   <div className="status-info">
                     <span className={`status-badge status-${order.status?.toLowerCase().replace('_', '-') || 'new'}`}>
@@ -639,33 +748,49 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     {order.returnTracking?.ekartTrackingId && (
                       <div className="tracking-info">
                         <div className="tracking-id">
-                          <strong>Tracking:</strong> {order.returnTracking.ekartTrackingId}
+                          <strong>Tracking:</strong> 
+                          <code style={{ fontSize: '11px', backgroundColor: '#f3f4f6', padding: '1px 4px', borderRadius: '3px' }}>
+                            {order.returnTracking.ekartTrackingId}
+                          </code>
                         </div>
                         <div className="current-status">
-                          <strong>Current:</strong> {order.returnTracking.currentStatus}
+                          <strong>Status:</strong> 
+                          <span className={`tracking-status status-${order.returnTracking.currentStatus?.toLowerCase().replace(/_/g, '-')}`}>
+                            {order.returnTracking.currentStatus}
+                          </span>
                         </div>
+                        {order.returnTracking.lastUpdated && (
+                          <div className="last-updated" style={{ fontSize: '11px', color: '#666' }}>
+                            Updated: {formatDateTime(order.returnTracking.lastUpdated)}
+                          </div>
+                        )}
                         {order.returnTracking.history && order.returnTracking.history.length > 0 && (
                           <details className="tracking-history">
                             <summary>History ({order.returnTracking.history.length})</summary>
                             <div className="history-list">
-                              {order.returnTracking.history.map((h, i) => (
+                              {order.returnTracking.history.slice(0, 5).map((h, i) => (
                                 <div key={i} className="history-item">
                                   <div className="history-status">{h.status}</div>
                                   <div className="history-time">{formatDateTime(h.timestamp)}</div>
+                                  {h.city && <div className="history-city">📍 {h.city}</div>}
                                   {h.description && (
                                     <div className="history-desc">{h.description}</div>
                                   )}
                                 </div>
                               ))}
+                              {order.returnTracking.history.length > 5 && (
+                                <div className="more-history">... and {order.returnTracking.history.length - 5} more</div>
+                              )}
                             </div>
                           </details>
                         )}
                         <button
                           onClick={() => refreshTracking(order.orderId)}
                           className="btn btn-sm refresh-btn"
+                          disabled={order.trackingLoading}
                           title="Refresh tracking status"
                         >
-                          🔄 Refresh
+                          {order.trackingLoading ? "⏳" : "🔄"} Refresh
                         </button>
                       </div>
                     )}

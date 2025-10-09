@@ -47,6 +47,7 @@ export default function App() {
       setLoading(false);
     }
   };
+
   const handleSyncOrders = async () => {
     try {
       setLoading(true);
@@ -61,7 +62,6 @@ export default function App() {
       setLoading(false);
     }
   };
-
 
   const handleCSVUploaded = (updatedOrders) => {
     if (updatedOrders?.length) {
@@ -89,14 +89,12 @@ export default function App() {
           });
         });
 
-      const sortedOrders = Array.from(orderMap.values()).sort((a, b) => {
-        const dateA = new Date(a.updatedAt || a.createdAt);
-        const dateB = new Date(b.updatedAt || b.createdAt);
-        return dateB - dateA;
-      });
-      return sortedOrders;
-
-
+        const sortedOrders = Array.from(orderMap.values()).sort((a, b) => {
+          const dateA = new Date(a.updatedAt || a.createdAt);
+          const dateB = new Date(b.updatedAt || b.createdAt);
+          return dateB - dateA;
+        });
+        return sortedOrders;
       });
 
       toast.success(`✅ ${updatedOrders.length} orders updated successfully! Latest orders are at the top.`);
@@ -234,7 +232,13 @@ export default function App() {
 
     let statusMatch = true;
     if (selectedStatus === "AlreadyReturned") {
-      statusMatch = order.returnTracking && order.returnTracking.currentStatus === "Returned";
+      statusMatch = order.returnTracking && 
+                   (order.returnTracking.currentStatus === "return_delivered" || 
+                    order.returnTracking.currentStatus === "returned_to_seller");
+    } else if (selectedStatus === "TrackingActive") {
+      statusMatch = order.returnTracking?.ekartTrackingId && 
+                   order.returnTracking.currentStatus && 
+                   !["return_delivered", "returned_to_seller", "cancelled"].includes(order.returnTracking.currentStatus);
     } else if (selectedStatus !== "All") {
       const orderStatus = order.status || "New";
       statusMatch = orderStatus === selectedStatus;
@@ -243,6 +247,7 @@ export default function App() {
     return searchMatch && statusMatch;
   });
 
+  // Enhanced status counts with tracking
   const getStatusCounts = () => {
     const counts = {
       All: orders.length,
@@ -252,7 +257,14 @@ export default function App() {
       SHIPPED: orders.filter(o => o.status === "SHIPPED").length,
       DELIVERED: orders.filter(o => o.status === "DELIVERED").length,
       AlreadyReturned: orders.filter(
-        o => o.returnTracking && o.returnTracking.currentStatus === "Returned"
+        o => o.returnTracking && 
+             (o.returnTracking.currentStatus === "return_delivered" || 
+              o.returnTracking.currentStatus === "returned_to_seller")
+      ).length,
+      TrackingActive: orders.filter(
+        o => o.returnTracking?.ekartTrackingId && 
+             o.returnTracking.currentStatus && 
+             !["return_delivered", "returned_to_seller", "cancelled"].includes(o.returnTracking.currentStatus)
       ).length,
     };
     return counts;
