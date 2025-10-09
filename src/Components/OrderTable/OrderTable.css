@@ -118,6 +118,8 @@
   cursor: not-allowed;
 }
 
+
+
 .pagination-controls button:hover:not(:disabled) {
   background-color: #f67700;
 }

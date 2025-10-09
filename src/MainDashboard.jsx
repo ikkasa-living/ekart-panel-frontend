@@ -30,8 +30,16 @@ export default function App() {
       setLoading(true);
       const res = await axios.get(`${API_URL}/api/shopify/orders`);
       const localOrders = Array.isArray(res.data?.data) ? res.data.data : [];
-      setOrders(localOrders);
-      console.log("✅ Orders fetched:", localOrders.length, "orders");
+      
+      // Sort orders by updatedAt/createdAt descending to show latest first
+      const sortedOrders = localOrders.sort((a, b) => {
+        const dateA = new Date(a.updatedAt || a.createdAt);
+        const dateB = new Date(b.updatedAt || b.createdAt);
+        return dateB - dateA;
+      });
+      
+      setOrders(sortedOrders);
+      console.log("✅ Orders fetched:", sortedOrders.length, "orders");
     } catch (err) {
       console.error("❌ Error fetching orders:", err);
       toast.error("Failed to fetch orders. Please try again.");
@@ -39,7 +47,6 @@ export default function App() {
       setLoading(false);
     }
   };
-
   const handleSyncOrders = async () => {
     try {
       setLoading(true);
@@ -55,9 +62,47 @@ export default function App() {
     }
   };
 
-  const handleCSVUploaded = async () => {
-    await fetchOrders();
-    toast.success("✅ File uploaded and orders refreshed");
+
+  const handleCSVUploaded = (updatedOrders) => {
+    if (updatedOrders?.length) {
+      setOrders((prevOrders) => {
+        // Normalize orderId to prevent # issues
+        const normalize = (id) => id?.toString().trim().replace(/^#/, "");
+
+        // Create a map of existing orders by orderId
+        const orderMap = new Map();
+        
+        // First, add all existing orders to the map
+        prevOrders.forEach((order) => {
+          const normalizedId = normalize(order.orderId);
+          orderMap.set(normalizedId, order);
+        });
+
+        // Then update/add the uploaded orders with their latest data
+        updatedOrders.forEach((updatedOrder) => {
+          const normalizedId = normalize(updatedOrder.orderId);
+          // Update the order in the map with the latest data
+          orderMap.set(normalizedId, {
+            ...updatedOrder,
+            orderId: normalizedId,
+            updatedAt: new Date().toISOString(), // Ensure latest timestamp
+          });
+        });
+
+      const sortedOrders = Array.from(orderMap.values()).sort((a, b) => {
+        const dateA = new Date(a.updatedAt || a.createdAt);
+        const dateB = new Date(b.updatedAt || b.createdAt);
+        return dateB - dateA;
+      });
+      return sortedOrders;
+
+
+      });
+
+      toast.success(`✅ ${updatedOrders.length} orders updated successfully! Latest orders are at the top.`);
+    } else {
+      fetchOrders();
+    }
   };
 
   useEffect(() => {
@@ -69,11 +114,24 @@ export default function App() {
       setLoading(true);
       if (editOrderData) {
         const res = await axios.put(`${API_URL}/api/orders/${editOrderData._id}`, order);
-        setOrders(orders.map((o) => (o._id === editOrderData._id ? res.data.data : o)));
+        setOrders((prevOrders) => {
+          const updated = prevOrders.map((o) =>
+            o._id === editOrderData._id ? { ...res.data.data, updatedAt: new Date().toISOString() } : o
+          );
+          
+          // Sort by updatedAt descending so the updated order stays on top
+          return updated.sort((a, b) => {
+            const dateA = new Date(a.updatedAt || a.createdAt);
+            const dateB = new Date(b.updatedAt || b.createdAt);
+            return dateB - dateA;
+          });
+        });
+
         toast.success("✅ Order updated successfully");
       } else {
         const res = await axios.post(`${API_URL}/api/orders`, order);
-        setOrders([res.data.data, ...orders]);
+        // Add new order at the beginning
+        setOrders((prevOrders) => [{ ...res.data.data, updatedAt: new Date().toISOString() }, ...prevOrders]);
         toast.success("✅ Order created successfully");
       }
       setShowOrderForm(false);
@@ -90,7 +148,20 @@ export default function App() {
     try {
       setLoading(true);
       const res = await axios.put(`${API_URL}/api/orders/${orderData._id}`, orderData);
-      setOrders(orders.map((o) => (o._id === orderData._id ? res.data.data : o)));
+      
+      setOrders((prevOrders) => {
+        const updated = prevOrders.map((o) => 
+          o._id === orderData._id ? { ...res.data.data, updatedAt: new Date().toISOString() } : o
+        );
+        
+        // Sort to bring updated order to top
+        return updated.sort((a, b) => {
+          const dateA = new Date(a.updatedAt || a.createdAt);
+          const dateB = new Date(b.updatedAt || b.createdAt);
+          return dateB - dateA;
+        });
+      });
+      
       toast.success("✅ Return information saved successfully");
       setSelectedStatus("AlreadyReturned");
     } catch (err) {
@@ -114,24 +185,38 @@ export default function App() {
       } else if (action === "addTag") {
         const tag = prompt("Enter tag:");
         if (tag) {
-          const updated = { ...order, tag };
+          const updated = { ...order, tag, updatedAt: new Date().toISOString() };
           const res = await axios.put(`${API_URL}/api/orders/${order._id}`, updated);
-          setOrders(orders.map((o) => (o._id === order._id ? res.data.data : o)));
+          
+          setOrders((prevOrders) => {
+            const updatedOrders = prevOrders.map((o) => 
+              o._id === order._id ? { ...res.data.data, updatedAt: new Date().toISOString() } : o
+            );
+            
+            // Sort to bring updated order to top
+            return updatedOrders.sort((a, b) => {
+              const dateA = new Date(a.updatedAt || a.createdAt);
+              const dateB = new Date(b.updatedAt || b.createdAt);
+              return dateB - dateA;
+            });
+          });
+          
           toast.success(`✅ Tag '${tag}' added successfully`);
         }
       } else if (action === "cloneOrder") {
         const clonedOrder = {
           ...order,
           orderId: (order.orderId || order._id) + "-CLONE-" + Date.now(),
+          updatedAt: new Date().toISOString(),
         };
         delete clonedOrder._id;
         const res = await axios.post(`${API_URL}/api/orders`, clonedOrder);
-        setOrders([res.data.data, ...orders]);
+        setOrders((prevOrders) => [{ ...res.data.data, updatedAt: new Date().toISOString() }, ...prevOrders]);
         toast.success("✅ Order cloned successfully");
       } else if (action === "deleteOrder") {
         if (window.confirm("Are you sure you want to delete this order? This action cannot be undone.")) {
           await axios.delete(`${API_URL}/api/orders/${order._id}`);
-          setOrders(orders.filter((o) => o._id !== order._id));
+          setOrders((prevOrders) => prevOrders.filter((o) => o._id !== order._id));
           toast.success("✅ Order deleted successfully");
         }
       }
@@ -149,7 +234,6 @@ export default function App() {
 
     let statusMatch = true;
     if (selectedStatus === "AlreadyReturned") {
-      // Filter for orders with returnTracking indicating returned status or a flag you want to use
       statusMatch = order.returnTracking && order.returnTracking.currentStatus === "Returned";
     } else if (selectedStatus !== "All") {
       const orderStatus = order.status || "New";

@@ -52,7 +52,6 @@ const initialOrder = {
   awb: "",
   customerName: "",
   customerPhone: "",
-  customerEmail: "",
   customerAddress: "",
   city: "",
   state: "",
@@ -238,10 +237,6 @@ export default function OrderForm({ onSave, onClose, editData }) {
         <div>
           <label>Phone(Required):</label>
           <input name="customerPhone" value={order.customerPhone} onChange={handleChange} required />
-        </div>
-        <div>
-          <label>Email(Required):</label>
-          <input type="email" name="customerEmail" value={order.customerEmail} onChange={handleChange} />
         </div>
         <div>
           <label>Address(Required):</label>
