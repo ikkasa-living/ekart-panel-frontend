@@ -21,25 +21,27 @@ export default function App() {
   const [selectedStatus, setSelectedStatus] = useState("All");
   const [loading, setLoading] = useState(false);
 
-  // For return order form
   const [showReturnForm, setShowReturnForm] = useState(false);
   const [returnOrderData, setReturnOrderData] = useState(null);
 
+  /** ✅ Utility: Sort orders (latest first) */
+  const sortOrdersByLatest = (orders) => {
+    return [...orders].sort((a, b) => {
+      const aTime = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const bTime = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return bTime - aTime;
+    });
+  };
+
+  /** ✅ Fetch all orders from backend */
   const fetchOrders = async () => {
     try {
       setLoading(true);
       const res = await axios.get(`${API_URL}/api/shopify/orders`);
       const localOrders = Array.isArray(res.data?.data) ? res.data.data : [];
-      
-      // Sort orders by updatedAt/createdAt descending to show latest first
-      const sortedOrders = localOrders.sort((a, b) => {
-        const dateA = new Date(a.updatedAt || a.createdAt);
-        const dateB = new Date(b.updatedAt || b.createdAt);
-        return dateB - dateA;
-      });
-      
-      setOrders(sortedOrders);
-      console.log("✅ Orders fetched:", sortedOrders.length, "orders");
+      const sorted = sortOrdersByLatest(localOrders);
+      setOrders(sorted);
+      console.log("✅ Orders fetched:", sorted.length);
     } catch (err) {
       console.error("❌ Error fetching orders:", err);
       toast.error("Failed to fetch orders. Please try again.");
@@ -48,6 +50,7 @@ export default function App() {
     }
   };
 
+  /** ✅ Sync orders with Shopify */
   const handleSyncOrders = async () => {
     try {
       setLoading(true);
@@ -63,41 +66,26 @@ export default function App() {
     }
   };
 
+  /** ✅ When CSV file uploaded */
   const handleCSVUploaded = (updatedOrders) => {
     if (updatedOrders?.length) {
-      setOrders((prevOrders) => {
-        // Normalize orderId to prevent # issues
+      setOrders((prev) => {
         const normalize = (id) => id?.toString().trim().replace(/^#/, "");
-
-        // Create a map of existing orders by orderId
         const orderMap = new Map();
-        
-        // First, add all existing orders to the map
-        prevOrders.forEach((order) => {
-          const normalizedId = normalize(order.orderId);
-          orderMap.set(normalizedId, order);
-        });
 
-        // Then update/add the uploaded orders with their latest data
-        updatedOrders.forEach((updatedOrder) => {
-          const normalizedId = normalize(updatedOrder.orderId);
-          // Update the order in the map with the latest data
-          orderMap.set(normalizedId, {
-            ...updatedOrder,
-            orderId: normalizedId,
-            updatedAt: new Date().toISOString(), // Ensure latest timestamp
+        prev.forEach((order) => orderMap.set(normalize(order.orderId), order));
+        updatedOrders.forEach((updated) => {
+          const id = normalize(updated.orderId);
+          orderMap.set(id, {
+            ...updated,
+            orderId: id,
+            updatedAt: new Date().toISOString(),
           });
         });
 
-        const sortedOrders = Array.from(orderMap.values()).sort((a, b) => {
-          const dateA = new Date(a.updatedAt || a.createdAt);
-          const dateB = new Date(b.updatedAt || b.createdAt);
-          return dateB - dateA;
-        });
-        return sortedOrders;
+        return sortOrdersByLatest(Array.from(orderMap.values()));
       });
-
-      toast.success(`✅ ${updatedOrders.length} orders updated successfully! Latest orders are at the top.`);
+      toast.success(`✅ ${updatedOrders.length} orders updated successfully!`);
     } else {
       fetchOrders();
     }
@@ -107,29 +95,29 @@ export default function App() {
     fetchOrders();
   }, []);
 
+  /** ✅ Create or update order */
   const handleSaveOrder = async (order) => {
     try {
       setLoading(true);
       if (editOrderData) {
-        const res = await axios.put(`${API_URL}/api/orders/${editOrderData._id}`, order);
-        setOrders((prevOrders) => {
-          const updated = prevOrders.map((o) =>
-            o._id === editOrderData._id ? { ...res.data.data, updatedAt: new Date().toISOString() } : o
-          );
-          
-          // Sort by updatedAt descending so the updated order stays on top
-          return updated.sort((a, b) => {
-            const dateA = new Date(a.updatedAt || a.createdAt);
-            const dateB = new Date(b.updatedAt || b.createdAt);
-            return dateB - dateA;
-          });
-        });
-
+        const res = await axios.put(
+          `${API_URL}/api/orders/${editOrderData._id}`,
+          { ...editOrderData, ...order }
+        );
+        setOrders((prev) =>
+          sortOrdersByLatest(
+            prev.map((o) =>
+              o._id === editOrderData._id
+                ? { ...res.data.data, updatedAt: new Date().toISOString() }
+                : o
+            )
+          )
+        );
         toast.success("✅ Order updated successfully");
       } else {
         const res = await axios.post(`${API_URL}/api/orders`, order);
-        // Add new order at the beginning
-        setOrders((prevOrders) => [{ ...res.data.data, updatedAt: new Date().toISOString() }, ...prevOrders]);
+        const newOrder = { ...res.data.data, updatedAt: new Date().toISOString() };
+        setOrders((prev) => sortOrdersByLatest([newOrder, ...prev]));
         toast.success("✅ Order created successfully");
       }
       setShowOrderForm(false);
@@ -142,25 +130,21 @@ export default function App() {
     }
   };
 
+  /** ✅ Return order submit handler */
   const handleReturnOrderSubmit = async (orderData) => {
     try {
       setLoading(true);
       const res = await axios.put(`${API_URL}/api/orders/${orderData._id}`, orderData);
-      
-      setOrders((prevOrders) => {
-        const updated = prevOrders.map((o) => 
-          o._id === orderData._id ? { ...res.data.data, updatedAt: new Date().toISOString() } : o
-        );
-        
-        // Sort to bring updated order to top
-        return updated.sort((a, b) => {
-          const dateA = new Date(a.updatedAt || a.createdAt);
-          const dateB = new Date(b.updatedAt || b.createdAt);
-          return dateB - dateA;
-        });
-      });
-      
-      toast.success("✅ Return information saved successfully");
+      setOrders((prev) =>
+        sortOrdersByLatest(
+          prev.map((o) =>
+            o._id === orderData._id
+              ? { ...res.data.data, updatedAt: new Date().toISOString() }
+              : o
+          )
+        )
+      );
+      toast.success("✅ Return info saved successfully");
       setSelectedStatus("AlreadyReturned");
     } catch (err) {
       console.error("❌ Error saving return data:", err);
@@ -170,51 +154,49 @@ export default function App() {
     }
   };
 
+  /** ✅ Handle actions (edit, delete, clone, etc.) */
   const handleAction = async (action, order) => {
     try {
       setLoading(true);
       if (action === "editOrder") {
         setEditOrderData(order);
         setShowOrderForm(true);
-      } else if (action === "forwardShip") {
-        toast.info(`Forward shipping initiated for order ${order.orderId}`);
-      } else if (action === "reverseShip") {
-        toast.info(`Reverse shipping initiated for order ${order.orderId}`);
       } else if (action === "addTag") {
         const tag = prompt("Enter tag:");
         if (tag) {
-          const updated = { ...order, tag, updatedAt: new Date().toISOString() };
-          const res = await axios.put(`${API_URL}/api/orders/${order._id}`, updated);
-          
-          setOrders((prevOrders) => {
-            const updatedOrders = prevOrders.map((o) => 
-              o._id === order._id ? { ...res.data.data, updatedAt: new Date().toISOString() } : o
-            );
-            
-            // Sort to bring updated order to top
-            return updatedOrders.sort((a, b) => {
-              const dateA = new Date(a.updatedAt || a.createdAt);
-              const dateB = new Date(b.updatedAt || b.createdAt);
-              return dateB - dateA;
-            });
+          const res = await axios.put(`${API_URL}/api/orders/${order._id}`, {
+            ...order,
+            tag,
+            updatedAt: new Date().toISOString(),
           });
-          
+          setOrders((prev) =>
+            sortOrdersByLatest(
+              prev.map((o) =>
+                o._id === order._id
+                  ? { ...res.data.data, updatedAt: new Date().toISOString() }
+                  : o
+              )
+            )
+          );
           toast.success(`✅ Tag '${tag}' added successfully`);
         }
       } else if (action === "cloneOrder") {
         const clonedOrder = {
           ...order,
-          orderId: (order.orderId || order._id) + "-CLONE-" + Date.now(),
+          orderId: `${order.orderId || order._id}-CLONE-${Date.now()}`,
+          createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
         delete clonedOrder._id;
         const res = await axios.post(`${API_URL}/api/orders`, clonedOrder);
-        setOrders((prevOrders) => [{ ...res.data.data, updatedAt: new Date().toISOString() }, ...prevOrders]);
+        setOrders((prev) =>
+          sortOrdersByLatest([{ ...res.data.data }, ...prev])
+        );
         toast.success("✅ Order cloned successfully");
       } else if (action === "deleteOrder") {
-        if (window.confirm("Are you sure you want to delete this order? This action cannot be undone.")) {
+        if (window.confirm("Are you sure you want to delete this order?")) {
           await axios.delete(`${API_URL}/api/orders/${order._id}`);
-          setOrders((prevOrders) => prevOrders.filter((o) => o._id !== order._id));
+          setOrders((prev) => prev.filter((o) => o._id !== order._id));
           toast.success("✅ Order deleted successfully");
         }
       }
@@ -226,49 +208,59 @@ export default function App() {
     }
   };
 
-  const filteredOrders = orders.filter((order) => {
-    const orderString = JSON.stringify(order).toLowerCase();
-    const searchMatch = orderString.includes(searchTerm.toLowerCase());
+  /** ✅ Filter and sort orders */
+  const filteredOrders = sortOrdersByLatest(
+    orders.filter((order) => {
+      const matchSearch = JSON.stringify(order)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
 
-    let statusMatch = true;
-    if (selectedStatus === "AlreadyReturned") {
-      statusMatch = order.returnTracking && 
-                   (order.returnTracking.currentStatus === "return_delivered" || 
-                    order.returnTracking.currentStatus === "returned_to_seller");
-    } else if (selectedStatus === "TrackingActive") {
-      statusMatch = order.returnTracking?.ekartTrackingId && 
-                   order.returnTracking.currentStatus && 
-                   !["return_delivered", "returned_to_seller", "cancelled"].includes(order.returnTracking.currentStatus);
-    } else if (selectedStatus !== "All") {
-      const orderStatus = order.status || "New";
-      statusMatch = orderStatus === selectedStatus;
-    }
+      let statusMatch = true;
+      if (selectedStatus === "AlreadyReturned") {
+        statusMatch =
+          order.returnTracking &&
+          ["return_delivered", "returned_to_seller"].includes(
+            order.returnTracking.currentStatus
+          );
+      } else if (selectedStatus === "TrackingActive") {
+        statusMatch =
+          order.returnTracking?.ekartTrackingId &&
+          order.returnTracking.currentStatus &&
+          !["return_delivered", "returned_to_seller", "cancelled"].includes(
+            order.returnTracking.currentStatus
+          );
+      } else if (selectedStatus !== "All") {
+        const s = order.status || "New";
+        statusMatch = s === selectedStatus;
+      }
+      return matchSearch && statusMatch;
+    })
+  );
 
-    return searchMatch && statusMatch;
+  /** ✅ Status count helper */
+  const getStatusCounts = () => ({
+    All: orders.length,
+    New: orders.filter((o) => (o.status || "New") === "New").length,
+    RETURN_REQUESTED: orders.filter((o) => o.status === "RETURN_REQUESTED").length,
+    PROCESSING: orders.filter((o) => o.status === "PROCESSING").length,
+    SHIPPED: orders.filter((o) => o.status === "SHIPPED").length,
+    DELIVERED: orders.filter((o) => o.status === "DELIVERED").length,
+    AlreadyReturned: orders.filter(
+      (o) =>
+        o.returnTracking &&
+        ["return_delivered", "returned_to_seller"].includes(
+          o.returnTracking.currentStatus
+        )
+    ).length,
+    TrackingActive: orders.filter(
+      (o) =>
+        o.returnTracking?.ekartTrackingId &&
+        o.returnTracking.currentStatus &&
+        !["return_delivered", "returned_to_seller", "cancelled"].includes(
+          o.returnTracking.currentStatus
+        )
+    ).length,
   });
-
-  // Enhanced status counts with tracking
-  const getStatusCounts = () => {
-    const counts = {
-      All: orders.length,
-      New: orders.filter(o => (o.status || "New") === "New").length,
-      RETURN_REQUESTED: orders.filter(o => o.status === "RETURN_REQUESTED").length,
-      PROCESSING: orders.filter(o => o.status === "PROCESSING").length,
-      SHIPPED: orders.filter(o => o.status === "SHIPPED").length,
-      DELIVERED: orders.filter(o => o.status === "DELIVERED").length,
-      AlreadyReturned: orders.filter(
-        o => o.returnTracking && 
-             (o.returnTracking.currentStatus === "return_delivered" || 
-              o.returnTracking.currentStatus === "returned_to_seller")
-      ).length,
-      TrackingActive: orders.filter(
-        o => o.returnTracking?.ekartTrackingId && 
-             o.returnTracking.currentStatus && 
-             !["return_delivered", "returned_to_seller", "cancelled"].includes(o.returnTracking.currentStatus)
-      ).length,
-    };
-    return counts;
-  };
 
   const statusCounts = getStatusCounts();
 
@@ -281,6 +273,7 @@ export default function App() {
         setSelectedStatus={setSelectedStatus}
         statusCounts={statusCounts}
       />
+
       <div className="order-actions">
         <CreateOrder
           onClick={() => {
@@ -303,17 +296,20 @@ export default function App() {
           </span>
         )}
       </div>
+
       {loading && (
         <div style={{ textAlign: "center", padding: "20px" }}>
           <p>⏳ Loading orders...</p>
         </div>
       )}
+
       <OrderTable
         orders={filteredOrders}
         onAction={handleAction}
         onOrderUpdate={fetchOrders}
         loading={loading}
       />
+
       {showOrderForm && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -328,6 +324,7 @@ export default function App() {
           </div>
         </div>
       )}
+
       {showReturnForm && (
         <div className="modal-overlay">
           <div className="modal-content">
@@ -339,18 +336,8 @@ export default function App() {
           </div>
         </div>
       )}
-      <ToastContainer
-        position="top-right"
-        autoClose={4000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
+
+      <ToastContainer position="top-right" autoClose={4000} theme="colored" />
     </>
   );
 }

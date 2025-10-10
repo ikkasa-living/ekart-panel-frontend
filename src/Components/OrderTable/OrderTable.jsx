@@ -71,12 +71,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
   };
 
   // Sort localOrders so CSV (any products[].imageUrl) orders show at top
-  const sortedOrders = [...localOrders].sort((a, b) => {
-    const aHasCSV = a.products?.some(p => p.imageUrl);
-    const bHasCSV = b.products?.some(p => p.imageUrl);
-    if (aHasCSV === bHasCSV) return 0;
-    return aHasCSV ? -1 : 1;
-  });
+  const sortedOrders = [...localOrders];
 
   const totalPages = Math.ceil(sortedOrders.length / pageSize);
   const startIdx = (currentPage - 1) * pageSize;
