@@ -117,20 +117,20 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
       // Use the correct tracking endpoint from your backend
       const res = await axios.get(`${API_URL}/api/ekart/track/${orderId}`);
-      
+
       if (res.data.success) {
         setLocalOrders((prev) =>
           prev.map((o) =>
             o.orderId === orderId
-              ? { 
-                  ...o, 
-                  returnTracking: res.data.order,
-                  trackingLoading: false 
-                }
+              ? {
+                ...o,
+                returnTracking: res.data.order,
+                trackingLoading: false
+              }
               : o
           )
         );
-        
+
         if (onOrderUpdate) {
           onOrderUpdate();
         }
@@ -160,8 +160,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
   // New bulk tracking refresh functionality
   const handleBulkTrackingRefresh = async () => {
-    const ordersWithTracking = localOrders.filter(order => 
-      order.returnTracking?.ekartTrackingId && 
+    const ordersWithTracking = localOrders.filter(order =>
+      order.returnTracking?.ekartTrackingId &&
       selectedOrderIds.includes(order._id)
     );
 
@@ -172,22 +172,22 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
     try {
       setLoadingReturnId("bulk-tracking");
-      
+
       const trackingIds = ordersWithTracking.map(order => order.returnTracking.ekartTrackingId);
-      
+
       const response = await axios.post(`${API_URL}/api/ekart/track/bulk`, {
         trackingIds: trackingIds
       });
 
       if (response.data.success) {
         const trackingData = response.data.trackingData;
-        
+
         setLocalOrders((prev) =>
           prev.map((order) => {
             if (order.returnTracking?.ekartTrackingId && trackingData[order.returnTracking.ekartTrackingId]) {
               const shipmentData = trackingData[order.returnTracking.ekartTrackingId];
               const latestHistory = shipmentData.history?.[0];
-              
+
               return {
                 ...order,
                 returnTracking: {
@@ -211,7 +211,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             return order;
           })
         );
-        
+
         toast.success(`✅ Tracking updated for ${ordersWithTracking.length} orders`);
       }
     } catch (error) {
@@ -288,6 +288,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
   };
 
+  
+
   const handleReturnClick = async (order) => {
     setLoadingReturnId(order._id);
     try {
@@ -302,12 +304,13 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       const productsToReturn = order.products
         .filter((_, idx) => selectedProductIndices.includes(idx))
         .map(item => ({
-            ...item,
-            quantity: selectedReturnQuantities[order._id]?.[idx] || 1,
-            smart_checks: item.smart_checks || [],
-            uploadedImageUrl: item.uploadedImageUrl || "", 
+          ...item,
+          quantity: selectedReturnQuantities[order._id]?.[idx] || 1,
+          smart_checks: item.smart_checks || [],
+          uploadedImageUrl: item.uploadedImageUrl || "",
         }));
-
+        const trimmedPincode = (order.pincode || "").trim();
+        const validPincode = /^\d{6}$/.test(trimmedPincode) ? trimmedPincode : "";
       const payload = {
         shopifyId: order.shopifyId,
         orderId: order.orderId,
@@ -317,7 +320,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         customerAddress: order.customerAddress,
         city: order.city,
         state: order.state,
-        pincode: order.pincode,
+        
+        pincode: validPincode,
         products: productsToReturn.map((item) => ({
           ...item,
           smart_checks: item.smart_checks || [],
@@ -355,19 +359,19 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
           prev.map((o) =>
             o._id === order._id
               ? {
-                  ...o,
-                  status: "RETURN_REQUESTED",
-                  returnTracking: {
-                    currentStatus: "Return Initiated",
-                    history: [{
-                      status: "Return Initiated",
-                      timestamp: new Date(),
-                      description: "Return request submitted successfully"
-                    }],
-                    ekartTrackingId: response.data.trackingId,
-                    lastUpdated: new Date()
-                  }
+                ...o,
+                status: "RETURN_REQUESTED",
+                returnTracking: {
+                  currentStatus: "Return Initiated",
+                  history: [{
+                    status: "Return Initiated",
+                    timestamp: new Date(),
+                    description: "Return request submitted successfully"
+                  }],
+                  ekartTrackingId: response.data.trackingId,
+                  lastUpdated: new Date()
                 }
+              }
               : o
           )
         );
@@ -377,7 +381,9 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         toast.success(`✅ Return requested successfully for order ${order.orderId}`);
         setSelectedProductsPerOrder(prev => ({ ...prev, [order._id]: [] }));
       } else {
-        toast.error(response.data.message || "Failed to create return request");
+        const detailedError = response.data.message || response.data.details?.message || "Failed to create return request";
+        toast.error(`❌ Return failed: ${detailedError}`);
+        console.error("❌ Return request failed:", response.data);
         console.error("❌ Return request failed:", response.data);
       }
     } catch (err) {
@@ -427,7 +433,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             customerAddress: order.customerAddress,
             city: order.city,
             state: order.state,
-            pincode: order.pincode,
+             pincode: validPincode,
             products: productsToReturn.map((item) => ({
               ...item,
               smart_checks: item.smart_checks || [],
@@ -463,19 +469,19 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
               prev.map((o) =>
                 o._id === order._id
                   ? {
-                      ...o,
-                      status: "RETURN_REQUESTED",
-                      returnTracking: {
-                        currentStatus: "Return Initiated",
-                        history: [{
-                          status: "Return Initiated",
-                          timestamp: new Date(),
-                          description: "Bulk return request submitted"
-                        }],
-                        ekartTrackingId: response.data.trackingId,
-                        lastUpdated: new Date()
-                      }
+                    ...o,
+                    status: "RETURN_REQUESTED",
+                    returnTracking: {
+                      currentStatus: "Return Initiated",
+                      history: [{
+                        status: "Return Initiated",
+                        timestamp: new Date(),
+                        description: "Bulk return request submitted"
+                      }],
+                      ekartTrackingId: response.data.trackingId,
+                      lastUpdated: new Date()
                     }
+                  }
                   : o
               )
             );
@@ -549,7 +555,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         >
           {loadingReturnId === "bulk" ? "⏳ Processing..." : `🔄 Return Selected Orders (${selectedOrderIds.length})`}
         </button>
-        
+
         <button
           className="btn bulk-tracking-btn"
           onClick={handleBulkTrackingRefresh}
@@ -565,7 +571,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         >
           {loadingReturnId === "bulk-tracking" ? "⏳ Updating..." : `📍 Refresh Tracking (${selectedOrderIds.length})`}
         </button>
-        
+
         {selectedOrderIds.length > 0 && (
           <span style={{ color: "#666", fontSize: "14px" }}>
             {selectedOrderIds.length} orders selected
@@ -743,13 +749,13 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     {order.returnTracking?.ekartTrackingId && (
                       <div className="tracking-info">
                         <div className="tracking-id">
-                          <strong>Tracking:</strong> 
+                          <strong>Tracking:</strong>
                           <code style={{ fontSize: '11px', backgroundColor: '#f3f4f6', padding: '1px 4px', borderRadius: '3px' }}>
                             {order.returnTracking.ekartTrackingId}
                           </code>
                         </div>
                         <div className="current-status">
-                          <strong>Status:</strong> 
+                          <strong>Status:</strong>
                           <span className={`tracking-status status-${order.returnTracking.currentStatus?.toLowerCase().replace(/_/g, '-')}`}>
                             {order.returnTracking.currentStatus}
                           </span>

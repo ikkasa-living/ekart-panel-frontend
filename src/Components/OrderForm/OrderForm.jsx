@@ -43,8 +43,7 @@ const stateOptions = [
   { value: "Puducherry", label: "Puducherry" }
 ];
 
-
-// All fields reflected from backend schema!
+// All fields from backend schema!
 const initialOrder = {
   shopifyId: "",
   orderId: "",
@@ -81,6 +80,7 @@ const initialOrder = {
   invoiceReference: "",
   ekartResponse: "",
   status: "New",
+  productImage: "", // <-- Add this field for image support
   returnTracking: {
     currentStatus: "",
     history: [],
@@ -90,6 +90,7 @@ const initialOrder = {
 
 export default function OrderForm({ onSave, onClose, editData }) {
   const [order, setOrder] = useState(initialOrder);
+  const [newImage, setNewImage] = useState(null);
 
   useEffect(() => {
     if (editData) {
@@ -119,20 +120,22 @@ export default function OrderForm({ onSave, onClose, editData }) {
         paymentMode: editData.paymentMode ?? "",
         pickupPincode: editData.pickupPincode ?? "",
         status: editData.status || "New",
+        productImage: editData.productImage ?? "",
         returnTracking: {
           currentStatus: editData.returnTracking?.currentStatus ?? "",
           history: editData.returnTracking?.history ?? [],
           ekartTrackingId: editData.returnTracking?.ekartTrackingId ?? "",
         },
       });
+      setNewImage(null);
     } else {
       setOrder(initialOrder);
+      setNewImage(null);
     }
   }, [editData]);
 
   const handleChange = (e) => {
-    const { name, value, type } = e.target;
-    // Numeric fields
+    const { name, value } = e.target;
     const numberFields = [
       "deadWeight", "length", "breadth", "height",
       "volumetricWeight", "amount", "cgst", "sgst", "igst", "unitPrice"
@@ -145,7 +148,6 @@ export default function OrderForm({ onSave, onClose, editData }) {
     });
   };
 
-  // For nested returnTracking
   const handleTrackingChange = (e) => {
     const { name, value } = e.target;
     setOrder({
@@ -179,10 +181,15 @@ export default function OrderForm({ onSave, onClose, editData }) {
     setOrder({ ...order, products: filtered });
   };
 
-  const handleSubmit = (e) => {
+  const handleImageChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setNewImage(e.target.files[0]);
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Only valid products
-    const payload = {
+    let payload = {
       ...order,
       products: order.products.filter(
         (item) => item.productName.trim() && item.quantity > 0
@@ -192,14 +199,27 @@ export default function OrderForm({ onSave, onClose, editData }) {
       length: order.length === "" ? undefined : Number(order.length),
       breadth: order.breadth === "" ? undefined : Number(order.breadth),
       height: order.height === "" ? undefined : Number(order.height),
-      volumetricWeight:
-        order.volumetricWeight === "" ? undefined : Number(order.volumetricWeight),
+      volumetricWeight: order.volumetricWeight === "" ? undefined : Number(order.volumetricWeight),
       amount: order.amount === "" ? undefined : Number(order.amount),
       cgst: order.cgst === "" ? undefined : Number(order.cgst),
       sgst: order.sgst === "" ? undefined : Number(order.sgst),
       igst: order.igst === "" ? undefined : Number(order.igst),
       unitPrice: order.unitPrice === "" ? undefined : Number(order.unitPrice)
     };
+
+    // Handle image upload: if a new file is picked, upload to server/cloud here and use returned URL
+    if (newImage) {
+      // Example: upload to server/cloud and set payload.productImage to the result URL/path.
+      // For demo, just use the local file name.
+      payload.productImage = newImage.name;
+    } else if (order.productImage) {
+      // Retain old image if no new file picked
+      payload.productImage = order.productImage;
+    } else {
+      // Remove empty property if nothing is set
+      delete payload.productImage;
+    }
+
     onSave(payload);
 
     if (editData) {
@@ -263,7 +283,30 @@ export default function OrderForm({ onSave, onClose, editData }) {
           <label>Pincode(Required):</label>
           <input name="pincode" value={order.pincode} onChange={handleChange} />
         </div>
+
+        {/* ---- IMAGE UPLOAD FUNCTIONALITY --- */}
+        <div style={{ marginTop: "10px", marginBottom: "10px" }}>
+          <label>Product Image:</label>
+          <div>
+            {order.productImage && !newImage && (
+              <img src={order.productImage} alt="Order Product" style={{ width: "120px", marginBottom: "8px", borderRadius: "8px" }} />
+            )}
+            {newImage && (
+              <div><strong>Selected image:</strong> {newImage.name}</div>
+            )}
+            <input type="file" accept="image/*" onChange={handleImageChange} />
+            <small>
+              {order.productImage && !newImage
+                ? "Current image will be kept unless you upload a new one."
+                : "Upload an image for the product."
+              }
+            </small>
+          </div>
+        </div>
+        {/* ---- IMAGE UPLOAD END ---- */}
+
       </div>
+
       <h3>Products(Required)</h3>
       {order.products.map((p, i) => (
         <div key={i} className="product-row">

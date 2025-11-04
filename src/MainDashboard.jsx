@@ -96,39 +96,43 @@ export default function App() {
   }, []);
 
   /** ✅ Create or update order */
-  const handleSaveOrder = async (order) => {
-    try {
-      setLoading(true);
-      if (editOrderData) {
-        const res = await axios.put(
-          `${API_URL}/api/orders/${editOrderData._id}`,
-          { ...editOrderData, ...order }
-        );
-        setOrders((prev) =>
-          sortOrdersByLatest(
-            prev.map((o) =>
-              o._id === editOrderData._id
-                ? { ...res.data.data, updatedAt: new Date().toISOString() }
-                : o
-            )
+  // Create or update order
+const handleSaveOrder = async (orderPayload) => {
+  try {
+    setLoading(true);
+    if (editOrderData) {
+      const res = await axios.put(
+        `${API_URL}/api/orders/${editOrderData._id}`,
+        orderPayload
+      );
+      setOrders((prev) =>
+        sortOrdersByLatest(
+          prev.map((o) =>
+            o._id === editOrderData._id
+              ? { ...res.data.data, updatedAt: new Date().toISOString() }
+              : o
           )
-        );
-        toast.success("✅ Order updated successfully");
-      } else {
-        const res = await axios.post(`${API_URL}/api/orders`, order);
-        const newOrder = { ...res.data.data, updatedAt: new Date().toISOString() };
-        setOrders((prev) => sortOrdersByLatest([newOrder, ...prev]));
-        toast.success("✅ Order created successfully");
-      }
-      setShowOrderForm(false);
-      setEditOrderData(null);
-    } catch (err) {
-      console.error("❌ Error saving order:", err);
-      toast.error("❌ Failed to save order");
-    } finally {
-      setLoading(false);
+        )
+      );
+      toast.success("✅ Order updated successfully");
+    } else {
+      const res = await axios.post(`${API_URL}/api/orders`, orderPayload);
+      const newOrder = { ...res.data.data, updatedAt: new Date().toISOString() };
+      setOrders((prev) => sortOrdersByLatest([newOrder, ...prev]));
+      toast.success("✅ Order created successfully");
     }
-  };
+    setShowOrderForm(false);
+    setEditOrderData(null);
+  } catch (err) {
+    console.error("❌ Error saving order:", err);
+    toast.error("❌ Failed to save order");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
 
   /** ✅ Return order submit handler */
   const handleReturnOrderSubmit = async (orderData) => {
