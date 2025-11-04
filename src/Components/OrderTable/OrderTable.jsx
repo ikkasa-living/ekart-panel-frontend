@@ -288,8 +288,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
   };
 
-  
-
+  const trimmedPincode = (order.pincode || "").trim();
+  const validPincode = /^\d{6}$/.test(trimmedPincode) ? trimmedPincode : "";
   const handleReturnClick = async (order) => {
     setLoadingReturnId(order._id);
     try {
@@ -309,8 +309,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
           smart_checks: item.smart_checks || [],
           uploadedImageUrl: item.uploadedImageUrl || "",
         }));
-        const trimmedPincode = (order.pincode || "").trim();
-        const validPincode = /^\d{6}$/.test(trimmedPincode) ? trimmedPincode : "";
+
       const payload = {
         shopifyId: order.shopifyId,
         orderId: order.orderId,
@@ -320,8 +319,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         customerAddress: order.customerAddress,
         city: order.city,
         state: order.state,
-        
-        pincode: validPincode,
+        pincode: order.pincode,
         products: productsToReturn.map((item) => ({
           ...item,
           smart_checks: item.smart_checks || [],
@@ -433,7 +431,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             customerAddress: order.customerAddress,
             city: order.city,
             state: order.state,
-             pincode: validPincode,
+            pincode: order.pincode,
             products: productsToReturn.map((item) => ({
               ...item,
               smart_checks: item.smart_checks || [],
