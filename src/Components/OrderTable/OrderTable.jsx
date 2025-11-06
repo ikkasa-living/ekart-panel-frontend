@@ -595,10 +595,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
               <th>Package Details</th>
               <th>Payment</th>
               <th>Payment Method</th>
-              <th>Pickup Address</th>
-              <th>Pickup City</th>
-              <th>Pickup State</th>
-              <th>Pickup Pincode</th>
               <th>Destination Address</th>
               <th>HSN Code</th>
               <th>Invoice Reference</th>
