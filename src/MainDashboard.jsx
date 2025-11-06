@@ -34,21 +34,27 @@ export default function App() {
   };
 
   /** ✅ Fetch all orders from backend */
-  const fetchOrders = async () => {
-    try {
-      setLoading(true);
-      const res = await axios.get(`${API_URL}/api/shopify/orders`);
-      const localOrders = Array.isArray(res.data?.data) ? res.data.data : [];
-      const sorted = sortOrdersByLatest(localOrders);
-      setOrders(sorted);
-      console.log("✅ Orders fetched:", sorted.length);
-    } catch (err) {
-      console.error("❌ Error fetching orders:", err);
-      toast.error("Failed to fetch orders. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  /** ✅ Fetch all orders from backend */
+const fetchOrders = async () => {
+  try {
+    setLoading(true);
+    const res = await axios.get(`${API_URL}/api/shopify/orders`);
+    const localOrders = Array.isArray(res.data?.data) ? res.data.data : [];
+    const sorted = sortOrdersByLatest(localOrders);
+    setOrders(sorted);
+    console.log("✅ Orders fetched:", sorted.length);
+    
+    // Log return requested orders for debugging
+    const returnRequested = sorted.filter(o => o.status === 'RETURN_REQUESTED');
+    console.log("📦 Return Requested Orders:", returnRequested.length, returnRequested);
+  } catch (err) {
+    console.error("❌ Error fetching orders:", err);
+    toast.error("Failed to fetch orders. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   /** ✅ Sync orders with Shopify */
   const handleSyncOrders = async () => {

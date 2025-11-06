@@ -334,7 +334,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         pickupCity: order.pickupCity,
         pickupState: order.pickupState,
         pickupPincode: order.pickupPincode,
-        gstin: order.gstinNumber || "",
         hsn: order.hsnCode || order.hsn || "",
         invoiceId: order.invoiceReference || order.invoiceId || "",
         destinationName: order.destinationName || "",
@@ -446,7 +445,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             pickupCity: order.pickupCity,
             pickupState: order.pickupState,
             pickupPincode: order.pickupPincode,
-            gstin: order.gstinNumber || "",
             hsn: order.hsnCode || order.hsn || "",
             invoiceId: order.invoiceReference || order.invoiceId || "",
             destinationName: order.destinationName || "",
@@ -590,7 +588,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                   aria-label="Select all orders on page"
                 />
               </th>
-              <th>AWB</th>
               <th>Order Number</th>
               <th>Date</th>
               <th>Customer Details</th>
@@ -603,11 +600,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
               <th>Pickup State</th>
               <th>Pickup Pincode</th>
               <th>Destination Address</th>
-              <th>GSTIN Number</th>
               <th>HSN Code</th>
               <th>Invoice Reference</th>
-              <th>Return Label 1</th>
-              <th>Return Label 2</th>
               <th>Service Tier</th>
               <th>Category</th>
               <th>Unit Price</th>
@@ -626,7 +620,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     aria-label={`Select order ${order.orderId}`}
                   />
                 </td>
-                <td>{order.awb || "-"}</td>
                 <td>
                   <strong>
                     {order.orderId.startsWith("#") ? order.orderId : `#${order.orderId}`}
@@ -728,11 +721,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     {order.destinationPhone || "-"}
                   </div>
                 </td>
-                <td>{order.gstinNumber || "-"}</td>
                 <td>{order.hsnCode || order.hsn || "-"}</td>
                 <td>{order.invoiceReference || order.invoiceId || "-"}</td>
-                <td>{order.returnLabel1 || "-"}</td>
-                <td>{order.returnLabel2 || "-"}</td>
                 <td>{order.serviceTier || "-"}</td>
                 <td>{order.category || "-"}</td>
                 <td>{order.unitPrice ? `₹${order.unitPrice}` : "-"}</td>
