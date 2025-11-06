@@ -4,7 +4,9 @@ import { ToastContainer, toast } from "react-toastify";
 import ActionMenu from "../ActionMenu/ActionMenu";
 import "./OrderTable.css";
 
+
 const API_URL = import.meta.env.VITE_API_URL;
+
 
 export default function OrderTable({ orders, onAction, onOrderUpdate, loading = false }) {
   const [menuOpen, setMenuOpen] = useState(null);
@@ -17,11 +19,13 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
   const [selectedReturnQuantities, setSelectedReturnQuantities] = useState({});
   const menuRef = useRef(null);
 
+
   useEffect(() => {
     setLocalOrders([...orders]);
     setSelectedOrderIds([]);
     setSelectedProductsPerOrder({});
   }, [orders]);
+
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -40,6 +44,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     };
   }, []);
 
+
   const updateReturnQuantity = (orderId, productIdx, quantity) => {
     setSelectedReturnQuantities(prev => ({
       ...prev,
@@ -50,6 +55,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }));
   };
 
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
     return new Date(dateStr).toLocaleDateString('en-IN', {
@@ -58,6 +64,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       day: '2-digit'
     });
   };
+
 
   const formatDateTime = (dateStr) => {
     if (!dateStr) return "";
@@ -70,12 +77,15 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     });
   };
 
+
   // Sort localOrders so CSV (any products[].imageUrl) orders show at top
   const sortedOrders = [...localOrders];
+
 
   const totalPages = Math.ceil(sortedOrders.length / pageSize);
   const startIdx = (currentPage - 1) * pageSize;
   const paginatedOrders = sortedOrders.slice(startIdx, startIdx + pageSize);
+
 
   const toggleSelectOrder = (orderId) => {
     setSelectedOrderIds((prev) =>
@@ -85,6 +95,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     );
   };
 
+
   const toggleSelectAll = (checked) => {
     if (checked) {
       setSelectedOrderIds(paginatedOrders.map((o) => o._id));
@@ -92,6 +103,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       setSelectedOrderIds([]);
     }
   };
+
 
   const toggleSelectProduct = (orderId, productIdx) => {
     setSelectedProductsPerOrder(prev => {
@@ -104,6 +116,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     });
   };
 
+
   // Enhanced tracking refresh function
   const refreshTracking = async (orderId) => {
     try {
@@ -114,6 +127,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             : o
         )
       );
+
 
       // Use the correct tracking endpoint from your backend
       const res = await axios.get(`${API_URL}/api/ekart/track/${orderId}`);
@@ -158,6 +172,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
   };
 
+
   // New bulk tracking refresh functionality
   const handleBulkTrackingRefresh = async () => {
     const ordersWithTracking = localOrders.filter(order => 
@@ -165,10 +180,12 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       selectedOrderIds.includes(order._id)
     );
 
+
     if (ordersWithTracking.length === 0) {
       toast.warning("⚠️ No orders with tracking IDs selected");
       return;
     }
+
 
     try {
       setLoadingReturnId("bulk-tracking");
@@ -178,6 +195,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       const response = await axios.post(`${API_URL}/api/ekart/track/bulk`, {
         trackingIds: trackingIds
       });
+
 
       if (response.data.success) {
         const trackingData = response.data.trackingData;
@@ -222,6 +240,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
   };
 
+
   // IMAGE UPLOAD (with preview for verification) - unchanged
   const handleFileUpload = async (file, orderId, productIndex) => {
     try {
@@ -242,6 +261,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         })
       );
 
+
       // 2. Upload as before
       const formData = new FormData();
       formData.append("file", file);
@@ -249,6 +269,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         headers: { "Content-Type": "multipart/form-data" },
       });
       const photoUrl = uploadRes.data.url;
+
 
       setLocalOrders((prevOrders) =>
         prevOrders.map((order) => {
@@ -280,6 +301,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         })
       );
 
+
       const productName = localOrders.find((o) => o._id === orderId).products[productIndex].productName;
       toast.success(`✅ Photo uploaded for ${productName}`);
     } catch (err) {
@@ -287,6 +309,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       toast.error("❌ Photo upload failed");
     }
   };
+
 
   const handleReturnClick = async (order) => {
     setLoadingReturnId(order._id);
@@ -297,7 +320,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         setLoadingReturnId(null);
         return;
       }
-      const vendorName = order.vendorName || "Ekart";
+
 
       const productsToReturn = order.products
         .filter((_, idx) => selectedProductIndices.includes(idx))
@@ -307,6 +330,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             smart_checks: item.smart_checks || [],
             uploadedImageUrl: item.uploadedImageUrl || "", 
         }));
+
 
       const payload = {
         shopifyId: order.shopifyId,
@@ -329,11 +353,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         volumetricWeight: order.volumetricWeight,
         amount: order.amount,
         paymentMode: order.paymentMode,
-        vendorName,
-        pickupAddress: order.pickupAddress,
-        pickupCity: order.pickupCity,
-        pickupState: order.pickupState,
-        pickupPincode: order.pickupPincode,
         hsn: order.hsnCode || order.hsn || "",
         invoiceId: order.invoiceReference || order.invoiceId || "",
         destinationName: order.destinationName || "",
@@ -345,9 +364,12 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         destinationPhone: order.destinationPhone || "",
       };
 
+
       console.log("🚀 Sending return request for order:", order.orderId);
 
+
       const response = await axios.post(`${API_URL}/api/ekart/return`, payload);
+
 
       if (response.data.success) {
         setLocalOrders((prev) =>
@@ -379,7 +401,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         const detailedError = response.data.message || response.data.details?.message || "Failed to create return request";
         toast.error(`❌ Return failed: ${detailedError}`);
         console.error("❌ Return request failed:", response.data);
-        console.error("❌ Return request failed:", response.data);
       }
     } catch (err) {
       console.error("❌ Return request error:", err);
@@ -390,23 +411,28 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
   };
 
+
   const handleBulkReturn = async () => {
     if (selectedOrderIds.length === 0) {
       toast.warning("⚠️ Please select orders to return");
       return;
     }
 
+
     const confirmMessage = `Are you sure you want to process return requests for ${selectedOrderIds.length} orders?`;
     if (!window.confirm(confirmMessage)) {
       return;
     }
 
+
     setLoadingReturnId("bulk");
+
 
     try {
       const ordersToReturn = localOrders.filter((o) => selectedOrderIds.includes(o._id));
       let successCount = 0;
       let errorCount = 0;
+
 
       for (const order of ordersToReturn) {
         try {
@@ -415,9 +441,10 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             errorCount++;
             continue;
           }
-          const vendorName = order.vendorName || "Ekart";
+
 
           const productsToReturn = order.products.filter((_, idx) => selectedProductIndices.includes(idx));
+
 
           const payload = {
             shopifyId: order.shopifyId,
@@ -440,11 +467,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             volumetricWeight: order.volumetricWeight,
             amount: order.amount,
             paymentMode: order.paymentMode,
-            vendorName,
-            pickupAddress: order.pickupAddress,
-            pickupCity: order.pickupCity,
-            pickupState: order.pickupState,
-            pickupPincode: order.pickupPincode,
             hsn: order.hsnCode || order.hsn || "",
             invoiceId: order.invoiceReference || order.invoiceId || "",
             destinationName: order.destinationName || "",
@@ -456,7 +478,9 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             destinationPhone: order.destinationPhone || "",
           };
 
+
           const response = await axios.post(`${API_URL}/api/ekart/return`, payload);
+
 
           if (response.data.success) {
             setLocalOrders((prev) =>
@@ -491,11 +515,14 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         }
       }
 
+
       if (onOrderUpdate) {
         onOrderUpdate();
       }
 
+
       setSelectedOrderIds([]);
+
 
       if (successCount > 0) {
         toast.success(`✅ Successfully processed ${successCount} return requests`);
@@ -511,6 +538,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
   };
 
+
   if (loading) {
     return (
       <div style={{ textAlign: "center", padding: "40px" }}>
@@ -518,6 +546,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       </div>
     );
   }
+
 
   if (localOrders.length === 0) {
     return (
@@ -529,6 +558,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       </div>
     );
   }
+
 
   return (
     <>
@@ -573,6 +603,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         )}
       </div>
 
+
       <div className="table-container">
         <table className="order-table">
           <thead>
@@ -608,6 +639,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
           <tbody>
             {[...new Map(paginatedOrders.map((o) => [o.orderId, o])).values()].map((order) => (
               <tr key={order._id} className={selectedOrderIds.includes(order._id) ? "selected" : ""}>
+                {/* Checkbox */}
                 <td>
                   <input
                     type="checkbox"
@@ -616,12 +648,18 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     aria-label={`Select order ${order.orderId}`}
                   />
                 </td>
+                
+                {/* Order Number */}
                 <td>
                   <strong>
                     {order.orderId.startsWith("#") ? order.orderId : `#${order.orderId}`}
                   </strong>
                 </td>
+                
+                {/* Date */}
                 <td>{formatDate(order.orderDate)}</td>
+                
+                {/* Customer Details */}
                 <td>
                   <div className="customer-details">
                     <div><strong>{order.customerName}</strong></div>
@@ -630,6 +668,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     <div style={{ fontSize: "12px", marginTop: "4px" }}>{order.customerAddress}</div>
                   </div>
                 </td>
+                
+                {/* Product Details */}
                 <td>
                   <div className="products-cell">
                     {order.products?.map((p, i) => (
@@ -686,6 +726,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     ))}
                   </div>
                 </td>
+                
+                {/* Package Details */}
                 <td>
                   <div className="package-details">
                     <div><strong>Weight:</strong> {order.deadWeight} kg</div>
@@ -694,19 +736,15 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     <div><strong>Vol. Weight:</strong> {order.volumetricWeight} kg</div>
                   </div>
                 </td>
+                
+                {/* Payment */}
                 <td>
                   <strong>₹{order.amount}</strong>
                 </td>
-                <td>{order.paymentMode}</td>
-                <td>
-                  <div>
-                    <div><strong>{order.vendorName}</strong></div>
-                    <div style={{ fontSize: "12px" }}>{order.pickupAddress}</div>
-                  </div>
-                </td>
-                <td>{order.pickupCity || "-"}</td>
-                <td>{order.pickupState || "-"}</td>
-                <td>{order.pickupPincode || "-"}</td>
+                
+                {/* Payment Method */}
+                <td>{order.paymentMode}</td>  
+                {/* Destination Address */}
                 <td>
                   <div style={{ fontSize: "12px", lineHeight: "1.3" }}>
                     <strong>{order.destinationName || "-"}</strong><br />
@@ -717,12 +755,23 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     {order.destinationPhone || "-"}
                   </div>
                 </td>
+                
+                {/* HSN Code */}
                 <td>{order.hsnCode || order.hsn || "-"}</td>
+                
+                {/* Invoice Reference */}
                 <td>{order.invoiceReference || order.invoiceId || "-"}</td>
+                
+                {/* Service Tier */}
                 <td>{order.serviceTier || "-"}</td>
+                
+                {/* Category */}
                 <td>{order.category || "-"}</td>
+                
+                {/* Unit Price */}
                 <td>{order.unitPrice ? `₹${order.unitPrice}` : "-"}</td>
-                {/* Enhanced Status & Tracking Cell */}
+                
+                {/* Status & Tracking */}
                 <td className="status-tracking-cell">
                   <div className="status-info">
                     <span className={`status-badge status-${order.status?.toLowerCase().replace('_', '-') || 'new'}`}>
@@ -779,6 +828,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     )}
                   </div>
                 </td>
+                
+                {/* Actions */}
                 <td className="action-cell">
                   <div className="action-buttons">
                     <button
@@ -810,6 +861,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
           </tbody>
         </table>
       </div>
+
 
       <div className="pagination-controls">
         <div className="pagination-buttons">
@@ -860,6 +912,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         </div>
       </div>
 
+
       {menuOpen && (
         <div
           ref={menuRef}
@@ -876,6 +929,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
           />
         </div>
       )}
+
 
       <ToastContainer
         position="top-right"
