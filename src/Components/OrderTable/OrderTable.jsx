@@ -105,14 +105,12 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     try {
       console.log("🔄 Refreshing tracking for orderId:", orderId);
 
-      // ✅ Find the order to ensure it exists
       const orderToRefresh = localOrders.find(o => o.orderId === orderId);
       if (!orderToRefresh) {
         toast.error("❌ Order not found");
         return;
       }
 
-      // ✅ Show loading state
       setLocalOrders((prev) =>
         prev.map((o) =>
           o.orderId === orderId
@@ -123,7 +121,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
       console.log("📡 Fetching tracking from API for:", orderId);
 
-      // ✅ Call tracking endpoint
       const res = await axios.get(`${API_URL}/api/ekart/track/${orderId}`);
 
       console.log("📦 Tracking response received:", res.data);
@@ -132,23 +129,20 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         throw new Error(res.data?.message || "Failed to fetch tracking");
       }
 
-      // ✅ CRITICAL FIX: Only update tracking info, preserve entire order
       const updatedTrackingData = res.data.order?.returnTracking || res.data.tracking;
-      const preservedOrder = localOrders.find(o => o.orderId === orderId);
 
       console.log("✅ Update info:", {
         orderId,
         currentTrackingStatus: updatedTrackingData?.currentStatus,
-        preservedOrderStatus: preservedOrder?.status, // ✅ Should be RETURN_REQUESTED
+        preservedOrderStatus: orderToRefresh?.status,
       });
 
       setLocalOrders((prev) =>
         prev.map((o) => {
           if (o.orderId === orderId) {
             return {
-              ...o,  // ✅ KEEP all existing data
-              returnTracking: updatedTrackingData,  // ✅ ONLY update tracking
-              // ✅ IMPORTANT: NOT changing status, it stays as is
+              ...o,
+              returnTracking: updatedTrackingData,
               trackingLoading: false,
               updatedAt: new Date().toISOString(),
             };
@@ -157,15 +151,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         })
       );
 
-      // ✅ Verify update
-      const updatedOrderAfter = localOrders.find(o => o.orderId === orderId);
-      console.log("✅ Order after update:", {
-        orderId,
-        status: updatedOrderAfter?.status,  // Should still be RETURN_REQUESTED
-        trackingId: updatedOrderAfter?.returnTracking?.ekartTrackingId,
-        currentStatus: updatedOrderAfter?.returnTracking?.currentStatus,
-      });
-
+      console.log("✅ Tracking refreshed successfully");
       toast.success("✅ Tracking status updated successfully", { autoClose: 3000 });
 
     } catch (err) {
@@ -174,14 +160,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       const errorMsg =
         err.response?.data?.message || err.message || "Error refreshing tracking";
 
-      console.error("❌ Error details:", {
-        message: errorMsg,
-        response: err.response?.data,
-      });
-
       toast.error(`❌ ${errorMsg}`, { autoClose: 3000 });
 
-      // ✅ Reset loading state on error
       setLocalOrders((prev) =>
         prev.map((o) =>
           o.orderId === orderId
@@ -192,7 +172,112 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
   };
 
-  // ✅ Bulk tracking refresh
+  // ✅ NEW: Handle retry pickup for cancelled returns
+  const handleRetryPickup = async (order) => {
+    if (!order.returnTracking?.ekartTrackingId) {
+      toast.warning("⚠️ No previous return attempt found");
+      return;
+    }
+
+    if (order.returnTracking?.currentStatus !== "Reverse pickup cancelled") {
+      toast.warning(`⚠️ Can only retry cancelled pickups. Current status: ${order.returnTracking?.currentStatus}`);
+      return;
+    }
+
+    console.log("🔄 Retrying failed pickup for order:", order.orderId);
+    setLoadingReturnId(`retry-${order._id}`);
+
+    try {
+      // ✅ Step 1: Reset the failed return
+      console.log("📍 Step 1: Resetting failed return...");
+      const resetResponse = await axios.post(`${API_URL}/api/ekart/retry-failed-return`, {
+        orderId: order.orderId,
+      });
+
+      if (!resetResponse.data.success) {
+        throw new Error(resetResponse.data.message);
+      }
+
+      console.log("✅ Return reset successfully");
+
+      // ✅ Step 2: Create new return request (reschedule pickup)
+      console.log("📍 Step 2: Rescheduling pickup...");
+      const rescheduleResponse = await axios.post(`${API_URL}/api/ekart/reschedule-pickup`, {
+        orderId: order.orderId,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        customerEmail: order.customerEmail,
+        customerAddress: order.customerAddress,
+        city: order.city,
+        state: order.state,
+        pincode: order.pincode,
+        products: order.products || [],
+        deadWeight: order.deadWeight,
+        length: order.length,
+        breadth: order.breadth,
+        height: order.height,
+        volumetricWeight: order.volumetricWeight,
+        amount: order.amount,
+        paymentMode: order.paymentMode,
+        hsnCode: order.hsnCode || order.hsn,
+        invoiceReference: order.invoiceReference,
+        destinationName: order.destinationName || "Ikkasa Warehouse",
+        destinationAddressLine1: order.destinationAddressLine1 || "",
+        destinationAddressLine2: order.destinationAddressLine2 || "",
+        destinationCity: order.destinationCity || "",
+        destinationState: order.destinationState || "",
+        destinationPincode: order.destinationPincode || "",
+        destinationPhone: order.destinationPhone || "",
+      });
+
+      if (!rescheduleResponse.data.success) {
+        throw new Error(rescheduleResponse.data.message);
+      }
+
+      // ✅ Step 3: Update local state
+      const newTrackingId = rescheduleResponse.data.trackingId;
+      const updatedOrder = rescheduleResponse.data.order;
+
+      setLocalOrders((prev) =>
+        prev.map((o) =>
+          o._id === order._id
+            ? {
+                ...updatedOrder,
+                trackingLoading: false,
+                updatedAt: new Date().toISOString(),
+              }
+            : o
+        )
+      );
+
+      // ✅ Show success
+      toast.success(
+        `✅ Pickup Rescheduled!\nNew Tracking ID: ${newTrackingId}\nEkart will contact customer for new pickup slot`,
+        { autoClose: 6000 }
+      );
+
+      console.log("✅ Pickup rescheduled with new tracking ID:", newTrackingId);
+
+    } catch (err) {
+      console.error("❌ Retry pickup error:", err);
+
+      const errorMsg =
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to reschedule pickup";
+
+      toast.error(`❌ Reschedule Failed:\n${errorMsg}`, { autoClose: 5000 });
+
+    } finally {
+      setLoadingReturnId(null);
+    }
+  };
+
+  // ✅ Check if should show retry button
+  const shouldShowRetryButton = (order) => {
+    return order.returnTracking?.currentStatus === "Reverse pickup cancelled";
+  };
+
   const handleBulkTrackingRefresh = async () => {
     const ordersWithTracking = localOrders.filter(
       (order) =>
@@ -262,7 +347,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
   };
 
-  // ✅ Image upload handler
   const handleFileUpload = async (file, orderId, productIndex) => {
     try {
       const previewUrl = URL.createObjectURL(file);
@@ -329,7 +413,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
   };
 
-  // ✅ FIXED: Complete handleReturnClick with proper error handling and state management
   const handleReturnClick = async (order) => {
     console.log("🚀 Return clicked for order:", order.orderId);
     setLoadingReturnId(order._id);
@@ -350,6 +433,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
           quantity: selectedReturnQuantities[order._id]?.[idx] || item.quantity || 1,
           smart_checks: item.smart_checks || [],
           uploadedImageUrl: item.uploadedImageUrl || "",
+          imageUrl: item.imageUrl || "",
         }));
 
       const payload = {
@@ -370,8 +454,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         volumetricWeight: order.volumetricWeight,
         amount: order.amount,
         paymentMode: order.paymentMode,
-        hsn: order.hsnCode || order.hsn || "",
-        invoiceId: order.invoiceReference || order.invoiceId || "",
+        hsnCode: order.hsnCode || order.hsn || "",
+        invoiceReference: order.invoiceReference || order.invoiceId || "",
         destinationName: order.destinationName || "",
         destinationAddressLine1: order.destinationAddressLine1 || "",
         destinationAddressLine2: order.destinationAddressLine2 || "",
@@ -383,12 +467,10 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
       console.log("📤 Sending return payload:", payload);
 
-      // ✅ CRITICAL: Make the API call
       const response = await axios.post(`${API_URL}/api/ekart/return`, payload);
 
       console.log("📨 Return response received:", response.data);
 
-      // ✅ FIXED: Check response.data.success NOT just response.status
       if (!response.data || !response.data.success) {
         const errorMsg =
           response.data?.message ||
@@ -400,26 +482,20 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         return;
       }
 
-      // ✅ FIXED: Extract ALL data from backend response
       const trackingId = response.data.trackingId;
       const updatedOrderFromBackend = response.data.order;
       const newStatus = response.data.orderStatus || updatedOrderFromBackend?.status;
 
-      console.log("✅ Backend returned:");
-      console.log("   - Tracking ID:", trackingId);
-      console.log("   - Order Status:", newStatus);
-      console.log("   - Full Updated Order:", updatedOrderFromBackend);
+      console.log("✅ Backend returned:", { trackingId, newStatus });
 
       if (!updatedOrderFromBackend) {
-        console.error("❌ ERROR: Backend did not return updated order object!");
+        console.error("❌ Backend did not return updated order object!");
         throw new Error("Backend response missing updated order data");
       }
 
-      // ✅ FIXED: Update local state IMMEDIATELY with the backend response
       setLocalOrders((prev) =>
         prev.map((o) => {
           if (o._id === order._id) {
-            // Use the FULL updated order from backend
             const newOrderState = {
               ...updatedOrderFromBackend,
               status: newStatus,
@@ -433,14 +509,12 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         })
       );
 
-      // ✅ Clear product selections immediately
       setSelectedProductsPerOrder((prev) => {
         const updated = { ...prev };
         delete updated[order._id];
         return updated;
       });
 
-      // ✅ FIXED: Show success toast with all details
       toast.success(
         `✅ Return Successfully Created!\nOrder: ${order.orderId}\nTracking ID: ${trackingId}\nStatus: ${newStatus}`,
         { autoClose: 5000 }
@@ -448,7 +522,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
       console.log("✅ Local state updated, UI should now show RETURN_REQUESTED status");
 
-      // ✅ OPTIONAL: Refetch after delay to ensure backend sync
       setTimeout(() => {
         console.log("🔄 Refetching all orders to sync with backend...");
         if (onOrderUpdate) {
@@ -457,9 +530,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       }, 1000);
     } catch (err) {
       console.error("❌ Return request error:", err);
-      console.error("❌ Full error object:", err.response?.data || err);
 
-      // ✅ FIXED: Better error extraction
       const errorMessage =
         err.response?.data?.message ||
         err.response?.data?.details?.message ||
@@ -475,7 +546,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
   };
 
-  // ✅ Bulk return handler
   const handleBulkReturn = async () => {
     if (selectedOrderIds.length === 0) {
       toast.warning("⚠️ Please select orders to return");
@@ -527,8 +597,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             volumetricWeight: order.volumetricWeight,
             amount: order.amount,
             paymentMode: order.paymentMode,
-            hsn: order.hsnCode || order.hsn || "",
-            invoiceId: order.invoiceReference || order.invoiceId || "",
+            hsnCode: order.hsnCode || order.hsn || "",
+            invoiceReference: order.invoiceReference || order.invoiceId || "",
             destinationName: order.destinationName || "",
             destinationAddressLine1: order.destinationAddressLine1 || "",
             destinationAddressLine2: order.destinationAddressLine2 || "",
@@ -932,12 +1002,75 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                               Updated: {formatDateTime(order.returnTracking.lastUpdated)}
                             </div>
                           )}
+
+                          {/* ✅ NEW: Show retry button if cancelled */}
+                          {shouldShowRetryButton(order) && (
+                            <div
+                              className="retry-section"
+                              style={{
+                                marginTop: "8px",
+                                paddingTop: "8px",
+                                borderTop: "1px solid #e5e7eb",
+                                backgroundColor: "#fef3c7",
+                                padding: "8px",
+                                borderRadius: "4px",
+                                borderLeft: "3px solid #f59e0b",
+                              }}
+                            >
+                              <div style={{ color: "#dc2626", fontSize: "13px", marginBottom: "6px" }}>
+                                ⚠️ Pickup was cancelled by Ekart
+                              </div>
+                              <button
+                                onClick={() => handleRetryPickup(order)}
+                                disabled={loadingReturnId === `retry-${order._id}`}
+                                className="btn btn-retry"
+                                style={{
+                                  width: "100%",
+                                  backgroundColor: "#f59e0b",
+                                  color: "white",
+                                  padding: "6px 12px",
+                                  borderRadius: "4px",
+                                  border: "none",
+                                  cursor: loadingReturnId === `retry-${order._id}` ? "not-allowed" : "pointer",
+                                  fontSize: "13px",
+                                  fontWeight: "500",
+                                }}
+                              >
+                                {loadingReturnId === `retry-${order._id}`
+                                  ? "⏳ Rescheduling..."
+                                  : "🔄 Reschedule Pickup"}
+                              </button>
+                              <p style={{ fontSize: "11px", color: "#666", marginTop: "4px", margin: "4px 0 0 0" }}>
+                                Ekart will schedule new pickup
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Existing refresh button (show if NOT cancelled) */}
+                          {!shouldShowRetryButton(order) && (
+                            <button
+                              onClick={() => refreshTracking(order.orderId)}
+                              className="btn btn-sm refresh-btn"
+                              disabled={order.trackingLoading}
+                              title="Refresh tracking status"
+                              style={{
+                                marginTop: "6px",
+                                padding: "4px 8px",
+                                fontSize: "12px",
+                              }}
+                            >
+                              {order.trackingLoading ? "⏳" : "🔄"} Refresh
+                            </button>
+                          )}
+
                           {order.returnTracking.history && order.returnTracking.history.length > 0 && (
-                            <details className="tracking-history">
-                              <summary>History ({order.returnTracking.history.length})</summary>
-                              <div className="history-list">
+                            <details className="tracking-history" style={{ marginTop: "6px" }}>
+                              <summary style={{ fontSize: "12px", cursor: "pointer" }}>
+                                History ({order.returnTracking.history.length})
+                              </summary>
+                              <div className="history-list" style={{ fontSize: "11px", marginTop: "4px" }}>
                                 {order.returnTracking.history.slice(0, 5).map((h, i) => (
-                                  <div key={i} className="history-item">
+                                  <div key={i} className="history-item" style={{ marginBottom: "4px", paddingLeft: "8px", borderLeft: "2px solid #e5e7eb" }}>
                                     <div className="history-status">{h.status}</div>
                                     <div className="history-time">{formatDateTime(h.timestamp)}</div>
                                     {h.city && <div className="history-city">📍 {h.city}</div>}
@@ -947,7 +1080,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                                   </div>
                                 ))}
                                 {order.returnTracking.history.length > 5 && (
-                                  <div className="more-history">
+                                  <div className="more-history" style={{ color: "#666", fontSize: "11px" }}>
                                     ... and {order.returnTracking.history.length - 5} more
                                   </div>
                                 )}
