@@ -100,11 +100,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     });
   };
 
-  // ✅ FIXED: refreshTracking - Preserves order status and tracking info
   const refreshTracking = async (orderId) => {
     try {
-      console.log("🔄 Refreshing tracking for orderId:", orderId);
-
       const orderToRefresh = localOrders.find(o => o.orderId === orderId);
       if (!orderToRefresh) {
         toast.error("❌ Order not found");
@@ -113,29 +110,17 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
       setLocalOrders((prev) =>
         prev.map((o) =>
-          o.orderId === orderId
-            ? { ...o, trackingLoading: true }
-            : o
+          o.orderId === orderId ? { ...o, trackingLoading: true } : o
         )
       );
 
-      console.log("📡 Fetching tracking from API for:", orderId);
-
       const res = await axios.get(`${API_URL}/api/ekart/track/${orderId}`);
-
-      console.log("📦 Tracking response received:", res.data);
 
       if (!res.data?.success) {
         throw new Error(res.data?.message || "Failed to fetch tracking");
       }
 
       const updatedTrackingData = res.data.order?.returnTracking || res.data.tracking;
-
-      console.log("✅ Update info:", {
-        orderId,
-        currentTrackingStatus: updatedTrackingData?.currentStatus,
-        preservedOrderStatus: orderToRefresh?.status,
-      });
 
       setLocalOrders((prev) =>
         prev.map((o) => {
@@ -151,28 +136,21 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         })
       );
 
-      console.log("✅ Tracking refreshed successfully");
       toast.success("✅ Tracking status updated successfully", { autoClose: 3000 });
 
     } catch (err) {
-      console.error("❌ Error refreshing tracking:", err);
-
       const errorMsg =
         err.response?.data?.message || err.message || "Error refreshing tracking";
-
       toast.error(`❌ ${errorMsg}`, { autoClose: 3000 });
 
       setLocalOrders((prev) =>
         prev.map((o) =>
-          o.orderId === orderId
-            ? { ...o, trackingLoading: false }
-            : o
+          o.orderId === orderId ? { ...o, trackingLoading: false } : o
         )
       );
     }
   };
 
-  // ✅ NEW: Handle retry pickup for cancelled returns
   const handleRetryPickup = async (order) => {
     if (!order.returnTracking?.ekartTrackingId) {
       toast.warning("⚠️ No previous return attempt found");
@@ -180,16 +158,15 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
 
     if (order.returnTracking?.currentStatus !== "Reverse pickup cancelled") {
-      toast.warning(`⚠️ Can only retry cancelled pickups. Current status: ${order.returnTracking?.currentStatus}`);
+      toast.warning(
+        `⚠️ Can only retry cancelled pickups. Current status: ${order.returnTracking?.currentStatus}`
+      );
       return;
     }
 
-    console.log("🔄 Retrying failed pickup for order:", order.orderId);
     setLoadingReturnId(`retry-${order._id}`);
 
     try {
-      // ✅ Step 1: Reset the failed return
-      console.log("📍 Step 1: Resetting failed return...");
       const resetResponse = await axios.post(`${API_URL}/api/ekart/retry-failed-return`, {
         orderId: order.orderId,
       });
@@ -198,10 +175,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         throw new Error(resetResponse.data.message);
       }
 
-      console.log("✅ Return reset successfully");
-
-      // ✅ Step 2: Create new return request (reschedule pickup)
-      console.log("📍 Step 2: Rescheduling pickup...");
       const rescheduleResponse = await axios.post(`${API_URL}/api/ekart/reschedule-pickup`, {
         orderId: order.orderId,
         customerName: order.customerName,
@@ -234,7 +207,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         throw new Error(rescheduleResponse.data.message);
       }
 
-      // ✅ Step 3: Update local state
       const newTrackingId = rescheduleResponse.data.trackingId;
       const updatedOrder = rescheduleResponse.data.order;
 
@@ -250,30 +222,20 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         )
       );
 
-      // ✅ Show success
       toast.success(
         `✅ Pickup Rescheduled!\nNew Tracking ID: ${newTrackingId}\nEkart will contact customer for new pickup slot`,
         { autoClose: 6000 }
       );
 
-      console.log("✅ Pickup rescheduled with new tracking ID:", newTrackingId);
-
     } catch (err) {
-      console.error("❌ Retry pickup error:", err);
-
       const errorMsg =
-        err.response?.data?.message ||
-        err.message ||
-        "Failed to reschedule pickup";
-
+        err.response?.data?.message || err.message || "Failed to reschedule pickup";
       toast.error(`❌ Reschedule Failed:\n${errorMsg}`, { autoClose: 5000 });
-
     } finally {
       setLoadingReturnId(null);
     }
   };
 
-  // ✅ Check if should show retry button
   const shouldShowRetryButton = (order) => {
     return order.returnTracking?.currentStatus === "Reverse pickup cancelled";
   };
@@ -340,7 +302,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         });
       }
     } catch (error) {
-      console.error("❌ Bulk tracking error:", error);
       toast.error("❌ Bulk tracking update failed", { autoClose: 3000 });
     } finally {
       setLoadingReturnId(null);
@@ -408,13 +369,11 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       ].productName;
       toast.success(`✅ Photo uploaded for ${productName}`, { autoClose: 3000 });
     } catch (err) {
-      console.error("❌ Photo upload error:", err);
       toast.error("❌ Photo upload failed", { autoClose: 3000 });
     }
   };
 
   const handleReturnClick = async (order) => {
-    console.log("🚀 Return clicked for order:", order.orderId);
     setLoadingReturnId(order._id);
 
     try {
@@ -465,19 +424,16 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         destinationPhone: order.destinationPhone || "",
       };
 
-      console.log("📤 Sending return payload:", payload);
-
       const response = await axios.post(`${API_URL}/api/ekart/return`, payload);
 
-      console.log("📨 Return response received:", response.data);
-
-      if (!response.data || !response.data.success) {
+      if (!response.data?.success) {
         const errorMsg =
           response.data?.message ||
           response.data?.details?.message ||
+          response.data?.customerMessage ||
           "Unknown error occurred";
-        console.error("❌ Return request failed:", response.data);
-        toast.error(`❌ Return failed: ${errorMsg}`, { autoClose: 5000 });
+
+        toast.error(`❌ Return Failed:\n${errorMsg}`, { autoClose: 5000 });
         setLoadingReturnId(null);
         return;
       }
@@ -486,24 +442,19 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       const updatedOrderFromBackend = response.data.order;
       const newStatus = response.data.orderStatus || updatedOrderFromBackend?.status;
 
-      console.log("✅ Backend returned:", { trackingId, newStatus });
-
       if (!updatedOrderFromBackend) {
-        console.error("❌ Backend did not return updated order object!");
         throw new Error("Backend response missing updated order data");
       }
 
       setLocalOrders((prev) =>
         prev.map((o) => {
           if (o._id === order._id) {
-            const newOrderState = {
+            return {
               ...updatedOrderFromBackend,
               status: newStatus,
               trackingLoading: false,
               updatedAt: new Date().toISOString(),
             };
-            console.log("✅ Updating local state for order:", o._id, "New Status:", newStatus);
-            return newOrderState;
           }
           return o;
         })
@@ -520,27 +471,23 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         { autoClose: 5000 }
       );
 
-      console.log("✅ Local state updated, UI should now show RETURN_REQUESTED status");
-
       setTimeout(() => {
-        console.log("🔄 Refetching all orders to sync with backend...");
         if (onOrderUpdate) {
           onOrderUpdate();
         }
       }, 1000);
-    } catch (err) {
-      console.error("❌ Return request error:", err);
 
+    } catch (err) {
       const errorMessage =
         err.response?.data?.message ||
         err.response?.data?.details?.message ||
         err.response?.data?.error ||
+        err.response?.data?.customerMessage ||
         err.message ||
         "Error processing return request";
 
-      console.error("❌ Final error message:", errorMessage);
-
       toast.error(`❌ Return Failed:\n${errorMessage}`, { autoClose: 5000 });
+
     } finally {
       setLoadingReturnId(null);
     }
@@ -610,7 +557,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
           const response = await axios.post(`${API_URL}/api/ekart/return`, payload);
 
-          if (response.data.success) {
+          if (response.data?.success) {
             const updatedOrderFromBackend = response.data.order;
 
             setLocalOrders((prev) =>
@@ -627,11 +574,9 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             });
           } else {
             errorCount++;
-            console.error("❌ Bulk return failed for order:", order.orderId, response.data);
           }
         } catch (orderError) {
           errorCount++;
-          console.error("❌ Error processing return for order:", order.orderId, orderError);
         }
       }
 
@@ -647,13 +592,11 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         });
       }
       if (errorCount > 0) {
-        toast.error(
-          `❌ Failed to process ${errorCount} return requests (No products selected or error)`,
-          { autoClose: 5000 }
-        );
+        toast.error(`❌ Failed to process ${errorCount} return requests`, {
+          autoClose: 5000,
+        });
       }
     } catch (err) {
-      console.error("❌ Bulk return error:", err);
       toast.error("❌ Bulk return operation failed", { autoClose: 5000 });
     } finally {
       setLoadingReturnId(null);
@@ -672,16 +615,12 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     return (
       <div style={{ textAlign: "center", padding: "40px" }}>
         <p>📦 No orders found</p>
-        <p style={{ color: "#666", fontSize: "14px" }}>
-          Try adjusting your search criteria or sync orders from Shopify
-        </p>
       </div>
     );
   }
 
   return (
     <>
-      {/* Bulk Actions */}
       <div
         style={{
           marginBottom: "1rem",
@@ -734,7 +673,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         )}
       </div>
 
-      {/* Table Container */}
       <div className="table-container">
         <table className="order-table">
           <thead>
@@ -747,7 +685,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     selectedOrderIds.length === paginatedOrders.length
                   }
                   onChange={(e) => toggleSelectAll(e.target.checked)}
-                  aria-label="Select all orders on page"
                 />
               </th>
               <th>Order Number</th>
@@ -774,25 +711,20 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                   key={order._id}
                   className={selectedOrderIds.includes(order._id) ? "selected" : ""}
                 >
-                  {/* Checkbox */}
                   <td>
                     <input
                       type="checkbox"
                       checked={selectedOrderIds.includes(order._id)}
                       onChange={() => toggleSelectOrder(order._id)}
-                      aria-label={`Select order ${order.orderId}`}
                     />
                   </td>
 
-                  {/* Order Number */}
                   <td>
                     <strong>{order.orderId.startsWith("#") ? order.orderId : `#${order.orderId}`}</strong>
                   </td>
 
-                  {/* Date */}
                   <td>{formatDate(order.orderDate)}</td>
 
-                  {/* Customer Details */}
                   <td>
                     <div className="customer-details">
                       <div>
@@ -808,7 +740,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     </div>
                   </td>
 
-                  {/* Product Details */}
                   <td>
                     <div className="products-cell">
                       {order.products?.map((p, i) => (
@@ -821,7 +752,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                             type="checkbox"
                             checked={selectedProductsPerOrder[order._id]?.includes(i) || false}
                             onChange={() => toggleSelectProduct(order._id, i)}
-                            aria-label={`Select product ${p.productName} for return`}
                           />
                           <div className="product-info">
                             <strong>{p.productName}</strong> <span className="qty">(Qty: {p.quantity})</span>
@@ -831,7 +761,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                                 onChange={(e) =>
                                   updateReturnQuantity(order._id, i, Number(e.target.value))
                                 }
-                                aria-label={`Select quantity to return for ${p.productName}`}
                                 style={{ marginLeft: "8px" }}
                               >
                                 {Array.from({ length: p.quantity }, (_, idx) => idx + 1).map(
@@ -855,11 +784,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                                   objectFit: "cover",
                                   borderRadius: "4px",
                                 }}
-                                className="csv-product-image"
-                                onError={(e) => {
-                                  e.target.style.display = "none";
-                                  console.error("Error loading CSV image:", p.imageUrl);
-                                }}
                               />
                             </div>
                           )}
@@ -869,7 +793,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                                 <img
                                   src={p.previewImage}
                                   alt="Preview"
-                                  className="uploaded-image"
                                   style={{
                                     width: "60px",
                                     height: "60px",
@@ -889,7 +812,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                                 }
                               }}
                               style={{ fontSize: "11px" }}
-                              aria-label={`Upload image for ${p.productName}`}
                             />
                           </div>
                         </div>
@@ -897,7 +819,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     </div>
                   </td>
 
-                  {/* Package Details */}
                   <td>
                     <div className="package-details">
                       <div>
@@ -915,15 +836,12 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     </div>
                   </td>
 
-                  {/* Payment */}
                   <td>
                     <strong>₹{order.amount}</strong>
                   </td>
 
-                  {/* Payment Method */}
                   <td>{order.paymentMode}</td>
 
-                  {/* Destination Address */}
                   <td>
                     <div style={{ fontSize: "12px", lineHeight: "1.3" }}>
                       <strong>{order.destinationName || "-"}</strong>
@@ -944,22 +862,16 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     </div>
                   </td>
 
-                  {/* HSN Code */}
                   <td>{order.hsnCode || order.hsn || "-"}</td>
 
-                  {/* Invoice Reference */}
                   <td>{order.invoiceReference || order.invoiceId || "-"}</td>
 
-                  {/* Service Tier */}
                   <td>{order.serviceTier || "-"}</td>
 
-                  {/* Category */}
                   <td>{order.category || "-"}</td>
 
-                  {/* Unit Price */}
                   <td>{order.unitPrice ? `₹${order.unitPrice}` : "-"}</td>
 
-                  {/* Status & Tracking */}
                   <td className="status-tracking-cell">
                     <div className="status-info">
                       <span
@@ -974,28 +886,13 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                         <div className="tracking-info">
                           <div className="tracking-id">
                             <strong>Tracking:</strong>
-                            <code
-                              style={{
-                                fontSize: "11px",
-                                backgroundColor: "#f3f4f6",
-                                padding: "1px 4px",
-                                borderRadius: "3px",
-                              }}
-                            >
+                            <code style={{ fontSize: "11px", backgroundColor: "#f3f4f6", padding: "1px 4px", borderRadius: "3px" }}>
                               {order.returnTracking.ekartTrackingId}
                             </code>
                           </div>
                           <div className="current-status">
                             <strong>Status:</strong>
-                            <span
-                              className={`tracking-status status-${(
-                                order.returnTracking.currentStatus || ""
-                              )
-                                .toLowerCase()
-                                .replace(/_/g, "-")}`}
-                            >
-                              {order.returnTracking.currentStatus}
-                            </span>
+                            <span>{order.returnTracking.currentStatus}</span>
                           </div>
                           {order.returnTracking.lastUpdated && (
                             <div className="last-updated" style={{ fontSize: "11px", color: "#666" }}>
@@ -1003,10 +900,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                             </div>
                           )}
 
-                          {/* ✅ NEW: Show retry button if cancelled */}
                           {shouldShowRetryButton(order) && (
                             <div
-                              className="retry-section"
                               style={{
                                 marginTop: "8px",
                                 paddingTop: "8px",
@@ -1023,7 +918,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                               <button
                                 onClick={() => handleRetryPickup(order)}
                                 disabled={loadingReturnId === `retry-${order._id}`}
-                                className="btn btn-retry"
                                 style={{
                                   width: "100%",
                                   backgroundColor: "#f59e0b",
@@ -1046,17 +940,18 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                             </div>
                           )}
 
-                          {/* Existing refresh button (show if NOT cancelled) */}
                           {!shouldShowRetryButton(order) && (
                             <button
                               onClick={() => refreshTracking(order.orderId)}
-                              className="btn btn-sm refresh-btn"
                               disabled={order.trackingLoading}
-                              title="Refresh tracking status"
                               style={{
                                 marginTop: "6px",
                                 padding: "4px 8px",
                                 fontSize: "12px",
+                                backgroundColor: "#dbeafe",
+                                border: "1px solid #93c5fd",
+                                borderRadius: "4px",
+                                cursor: "pointer",
                               }}
                             >
                               {order.trackingLoading ? "⏳" : "🔄"} Refresh
@@ -1064,23 +959,21 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                           )}
 
                           {order.returnTracking.history && order.returnTracking.history.length > 0 && (
-                            <details className="tracking-history" style={{ marginTop: "6px" }}>
+                            <details style={{ marginTop: "6px" }}>
                               <summary style={{ fontSize: "12px", cursor: "pointer" }}>
                                 History ({order.returnTracking.history.length})
                               </summary>
-                              <div className="history-list" style={{ fontSize: "11px", marginTop: "4px" }}>
+                              <div style={{ fontSize: "11px", marginTop: "4px" }}>
                                 {order.returnTracking.history.slice(0, 5).map((h, i) => (
-                                  <div key={i} className="history-item" style={{ marginBottom: "4px", paddingLeft: "8px", borderLeft: "2px solid #e5e7eb" }}>
-                                    <div className="history-status">{h.status}</div>
-                                    <div className="history-time">{formatDateTime(h.timestamp)}</div>
-                                    {h.city && <div className="history-city">📍 {h.city}</div>}
-                                    {h.description && (
-                                      <div className="history-desc">{h.description}</div>
-                                    )}
+                                  <div key={i} style={{ marginBottom: "4px", paddingLeft: "8px", borderLeft: "2px solid #e5e7eb" }}>
+                                    <div>{h.status}</div>
+                                    <div>{formatDateTime(h.timestamp)}</div>
+                                    {h.city && <div>📍 {h.city}</div>}
+                                    {h.description && <div>{h.description}</div>}
                                   </div>
                                 ))}
                                 {order.returnTracking.history.length > 5 && (
-                                  <div className="more-history" style={{ color: "#666", fontSize: "11px" }}>
+                                  <div style={{ color: "#666", fontSize: "11px" }}>
                                     ... and {order.returnTracking.history.length - 5} more
                                   </div>
                                 )}
@@ -1092,18 +985,20 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                     </div>
                   </td>
 
-                  {/* Actions */}
                   <td className="action-cell">
-                    <div className="action-buttons">
+                    <div style={{ display: "flex", gap: "4px" }}>
                       <button
-                        className={`btn return-btn ${order.status === "RETURN_REQUESTED" ? "disabled" : ""}`}
+                        style={{
+                          backgroundColor: order.status === "RETURN_REQUESTED" ? "#d1d5db" : "#ea580c",
+                          color: "white",
+                          padding: "6px 12px",
+                          borderRadius: "4px",
+                          border: "none",
+                          cursor: order.status === "RETURN_REQUESTED" ? "not-allowed" : "pointer",
+                          fontSize: "13px",
+                        }}
                         onClick={() => handleReturnClick(order)}
                         disabled={loadingReturnId === order._id || order.status === "RETURN_REQUESTED"}
-                        title={
-                          order.status === "RETURN_REQUESTED"
-                            ? "Return already requested"
-                            : "Request return"
-                        }
                       >
                         {loadingReturnId === order._id
                           ? "⏳"
@@ -1112,7 +1007,13 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                             : "🔄 Return"}
                       </button>
                       <button
-                        className="btn btn-menu"
+                        style={{
+                          backgroundColor: "#e5e7eb",
+                          padding: "6px 8px",
+                          borderRadius: "4px",
+                          border: "none",
+                          cursor: "pointer",
+                        }}
                         onClick={(e) => {
                           const rect = e.target.getBoundingClientRect();
                           setMenuOpen({
@@ -1121,7 +1022,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                             left: rect.left,
                           });
                         }}
-                        title="More actions"
                       >
                         ⋮
                       </button>
@@ -1134,34 +1034,21 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         </table>
       </div>
 
-      {/* Pagination */}
       <div className="pagination-controls">
         <div className="pagination-buttons">
-          <button
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(1)}
-          >
+          <button disabled={currentPage === 1} onClick={() => setCurrentPage(1)}>
             ⏮ First
           </button>
-          <button
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((p) => p - 1)}
-          >
+          <button disabled={currentPage === 1} onClick={() => setCurrentPage((p) => p - 1)}>
             ◀ Prev
           </button>
           <span className="page-info">
             Page {currentPage} of {totalPages}
           </span>
-          <button
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((p) => p + 1)}
-          >
+          <button disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)}>
             Next ▶
           </button>
-          <button
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage(totalPages)}
-          >
+          <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)}>
             Last ⏭
           </button>
         </div>
@@ -1184,7 +1071,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         </div>
       </div>
 
-      {/* Action Menu */}
       {menuOpen && (
         <div
           ref={menuRef}
@@ -1195,10 +1081,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             zIndex: 2000,
           }}
         >
-          <ActionMenu
-            order={localOrders.find((o) => o._id === menuOpen.id)}
-            onAction={onAction}
-          />
+          <ActionMenu order={localOrders.find((o) => o._id === menuOpen.id)} onAction={onAction} />
         </div>
       )}
 
