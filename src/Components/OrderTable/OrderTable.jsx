@@ -100,62 +100,99 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     });
   };
 
-  // ✅ FIXED: Enhanced tracking refresh function
+  // ✅ FIXED: refreshTracking - Preserves order status and tracking info
   const refreshTracking = async (orderId) => {
     try {
       console.log("🔄 Refreshing tracking for orderId:", orderId);
-      
+
+      // ✅ Find the order to ensure it exists
+      const orderToRefresh = localOrders.find(o => o.orderId === orderId);
+      if (!orderToRefresh) {
+        toast.error("❌ Order not found");
+        return;
+      }
+
+      // ✅ Show loading state
       setLocalOrders((prev) =>
         prev.map((o) =>
-          o.orderId === orderId ? { ...o, trackingLoading: true } : o
+          o.orderId === orderId
+            ? { ...o, trackingLoading: true }
+            : o
         )
       );
 
-      // ✅ Use correct endpoint from backend routes
+      console.log("📡 Fetching tracking from API for:", orderId);
+
+      // ✅ Call tracking endpoint
       const res = await axios.get(`${API_URL}/api/ekart/track/${orderId}`);
 
-      console.log("📦 Tracking response:", res.data);
+      console.log("📦 Tracking response received:", res.data);
 
-      if (res.data.success) {
-        const updatedTrackingData = res.data.order?.returnTracking || res.data.tracking;
-        const updatedStatus = res.data.order?.status || res.data.orderStatus;
-
-        setLocalOrders((prev) =>
-          prev.map((o) =>
-            o.orderId === orderId
-              ? {
-                  ...o,
-                  returnTracking: updatedTrackingData,
-                  status: updatedStatus,
-                  trackingLoading: false,
-                  updatedAt: new Date().toISOString(),
-                }
-              : o
-          )
-        );
-
-        toast.success("✅ Tracking status updated successfully", { autoClose: 3000 });
-        console.log("✅ Tracking updated for order:", orderId);
-      } else {
-        throw new Error(res.data.message || "Failed to fetch tracking");
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || "Failed to fetch tracking");
       }
+
+      // ✅ CRITICAL FIX: Only update tracking info, preserve entire order
+      const updatedTrackingData = res.data.order?.returnTracking || res.data.tracking;
+      const preservedOrder = localOrders.find(o => o.orderId === orderId);
+
+      console.log("✅ Update info:", {
+        orderId,
+        currentTrackingStatus: updatedTrackingData?.currentStatus,
+        preservedOrderStatus: preservedOrder?.status, // ✅ Should be RETURN_REQUESTED
+      });
+
+      setLocalOrders((prev) =>
+        prev.map((o) => {
+          if (o.orderId === orderId) {
+            return {
+              ...o,  // ✅ KEEP all existing data
+              returnTracking: updatedTrackingData,  // ✅ ONLY update tracking
+              // ✅ IMPORTANT: NOT changing status, it stays as is
+              trackingLoading: false,
+              updatedAt: new Date().toISOString(),
+            };
+          }
+          return o;
+        })
+      );
+
+      // ✅ Verify update
+      const updatedOrderAfter = localOrders.find(o => o.orderId === orderId);
+      console.log("✅ Order after update:", {
+        orderId,
+        status: updatedOrderAfter?.status,  // Should still be RETURN_REQUESTED
+        trackingId: updatedOrderAfter?.returnTracking?.ekartTrackingId,
+        currentStatus: updatedOrderAfter?.returnTracking?.currentStatus,
+      });
+
+      toast.success("✅ Tracking status updated successfully", { autoClose: 3000 });
+
     } catch (err) {
       console.error("❌ Error refreshing tracking:", err);
 
       const errorMsg =
         err.response?.data?.message || err.message || "Error refreshing tracking";
 
+      console.error("❌ Error details:", {
+        message: errorMsg,
+        response: err.response?.data,
+      });
+
       toast.error(`❌ ${errorMsg}`, { autoClose: 3000 });
 
+      // ✅ Reset loading state on error
       setLocalOrders((prev) =>
         prev.map((o) =>
-          o.orderId === orderId ? { ...o, trackingLoading: false } : o
+          o.orderId === orderId
+            ? { ...o, trackingLoading: false }
+            : o
         )
       );
     }
   };
 
-  // ✅ NEW: Bulk tracking refresh
+  // ✅ Bulk tracking refresh
   const handleBulkTrackingRefresh = async () => {
     const ordersWithTracking = localOrders.filter(
       (order) =>
