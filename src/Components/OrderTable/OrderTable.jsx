@@ -954,14 +954,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                               </div>
                             </details>
                           )}
-                          <button
-                            onClick={() => refreshTracking(order.orderId)}
-                            className="btn btn-sm refresh-btn"
-                            disabled={order.trackingLoading}
-                            title="Refresh tracking status"
-                          >
-                            {order.trackingLoading ? "⏳" : "🔄"} Refresh
-                          </button>
                         </div>
                       )}
                     </div>
