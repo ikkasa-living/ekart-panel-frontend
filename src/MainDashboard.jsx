@@ -13,6 +13,9 @@ import "./index.css";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+// ✅ FIXED: Add a fetch state flag to prevent simultaneous fetches
+let isFetching = false;
+
 export default function App() {
   const [orders, setOrders] = useState([]);
   const [showOrderForm, setShowOrderForm] = useState(false);
@@ -33,30 +36,45 @@ export default function App() {
     });
   };
 
-  /** ✅ Fetch all orders from backend */
-  /** ✅ Fetch all orders from backend */
-const fetchOrders = async () => {
-  try {
-    setLoading(true);
-    const res = await axios.get(`${API_URL}/api/shopify/orders`);
-    const localOrders = Array.isArray(res.data?.data) ? res.data.data : [];
-    const sorted = sortOrdersByLatest(localOrders);
-    setOrders(sorted);
-    console.log("✅ Orders fetched:", sorted.length);
-    
-    // Log return requested orders for debugging
-    const returnRequested = sorted.filter(o => o.status === 'RETURN_REQUESTED');
-    console.log("📦 Return Requested Orders:", returnRequested.length, returnRequested);
-  } catch (err) {
-    console.error("❌ Error fetching orders:", err);
-    toast.error("Failed to fetch orders. Please try again.");
-  } finally {
-    setLoading(false);
-  }
-};
+  /** ✅ FIXED: Fetch all orders from backend with proper error handling */
+  const fetchOrders = async () => {
+    // ✅ FIXED: Prevent simultaneous fetches
+    if (isFetching) {
+      console.log("⏳ Fetch already in progress, skipping...");
+      return;
+    }
 
+    try {
+      isFetching = true;
+      setLoading(true);
+      console.log("📡 Fetching orders from backend...");
 
-  /** ✅ Sync orders with Shopify */
+      const res = await axios.get(`${API_URL}/api/shopify/orders`);
+      const localOrders = Array.isArray(res.data?.data) ? res.data.data : [];
+      const sorted = sortOrdersByLatest(localOrders);
+      setOrders(sorted);
+      console.log("✅ Orders fetched successfully:", sorted.length);
+
+      // ✅ FIXED: Log return requested orders for debugging
+      const returnRequested = sorted.filter((o) => o.status === "RETURN_REQUESTED");
+      console.log(
+        "📦 Return Requested Orders:",
+        returnRequested.length,
+        returnRequested.map((o) => ({
+          orderId: o.orderId,
+          status: o.status,
+          trackingId: o.returnTracking?.ekartTrackingId,
+        }))
+      );
+    } catch (err) {
+      console.error("❌ Error fetching orders:", err);
+      toast.error("Failed to fetch orders. Please try again.");
+    } finally {
+      isFetching = false;
+      setLoading(false);
+    }
+  };
+
   const handleSyncOrders = async () => {
     try {
       setLoading(true);
@@ -72,7 +90,6 @@ const fetchOrders = async () => {
     }
   };
 
-  /** ✅ When CSV file uploaded */
   const handleCSVUploaded = (updatedOrders) => {
     if (updatedOrders?.length) {
       setOrders((prev) => {
@@ -102,45 +119,40 @@ const fetchOrders = async () => {
   }, []);
 
   /** ✅ Create or update order */
-  // Create or update order
-const handleSaveOrder = async (orderPayload) => {
-  try {
-    setLoading(true);
-    if (editOrderData) {
-      const res = await axios.put(
-        `${API_URL}/api/orders/${editOrderData._id}`,
-        orderPayload
-      );
-      setOrders((prev) =>
-        sortOrdersByLatest(
-          prev.map((o) =>
-            o._id === editOrderData._id
-              ? { ...res.data.data, updatedAt: new Date().toISOString() }
-              : o
+  const handleSaveOrder = async (orderPayload) => {
+    try {
+      setLoading(true);
+      if (editOrderData) {
+        const res = await axios.put(
+          `${API_URL}/api/orders/${editOrderData._id}`,
+          orderPayload
+        );
+        setOrders((prev) =>
+          sortOrdersByLatest(
+            prev.map((o) =>
+              o._id === editOrderData._id
+                ? { ...res.data.data, updatedAt: new Date().toISOString() }
+                : o
+            )
           )
-        )
-      );
-      toast.success("✅ Order updated successfully");
-    } else {
-      const res = await axios.post(`${API_URL}/api/orders`, orderPayload);
-      const newOrder = { ...res.data.data, updatedAt: new Date().toISOString() };
-      setOrders((prev) => sortOrdersByLatest([newOrder, ...prev]));
-      toast.success("✅ Order created successfully");
+        );
+        toast.success("✅ Order updated successfully");
+      } else {
+        const res = await axios.post(`${API_URL}/api/orders`, orderPayload);
+        const newOrder = { ...res.data.data, updatedAt: new Date().toISOString() };
+        setOrders((prev) => sortOrdersByLatest([newOrder, ...prev]));
+        toast.success("✅ Order created successfully");
+      }
+      setShowOrderForm(false);
+      setEditOrderData(null);
+    } catch (err) {
+      console.error("❌ Error saving order:", err);
+      toast.error("❌ Failed to save order");
+    } finally {
+      setLoading(false);
     }
-    setShowOrderForm(false);
-    setEditOrderData(null);
-  } catch (err) {
-    console.error("❌ Error saving order:", err);
-    toast.error("❌ Failed to save order");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
-
-
-
-  /** ✅ Return order submit handler */
   const handleReturnOrderSubmit = async (orderData) => {
     try {
       setLoading(true);
@@ -199,9 +211,7 @@ const handleSaveOrder = async (orderPayload) => {
         };
         delete clonedOrder._id;
         const res = await axios.post(`${API_URL}/api/orders`, clonedOrder);
-        setOrders((prev) =>
-          sortOrdersByLatest([{ ...res.data.data }, ...prev])
-        );
+        setOrders((prev) => sortOrdersByLatest([{ ...res.data.data }, ...prev]));
         toast.success("✅ Order cloned successfully");
       } else if (action === "deleteOrder") {
         if (window.confirm("Are you sure you want to delete this order?")) {
