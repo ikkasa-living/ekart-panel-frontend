@@ -102,7 +102,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
   const refreshTracking = async (orderId) => {
     try {
-      const orderToRefresh = localOrders.find(o => o.orderId === orderId);
+      const orderToRefresh = localOrders.find((o) => o.orderId === orderId);
       if (!orderToRefresh) {
         toast.error("❌ Order not found");
         return;
@@ -137,7 +137,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
       );
 
       toast.success("✅ Tracking status updated successfully", { autoClose: 3000 });
-
     } catch (err) {
       const errorMsg =
         err.response?.data?.message || err.message || "Error refreshing tracking";
@@ -226,7 +225,6 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         `✅ Pickup Rescheduled!\nNew Tracking ID: ${newTrackingId}\nEkart will contact customer for new pickup slot`,
         { autoClose: 6000 }
       );
-
     } catch (err) {
       const errorMsg =
         err.response?.data?.message || err.message || "Failed to reschedule pickup";
@@ -373,6 +371,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
   };
 
+  // ✅ FIXED: handleReturnClick with multiple shipments support and always clickable return button
   const handleReturnClick = async (order) => {
     setLoadingReturnId(order._id);
 
@@ -385,143 +384,24 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
         return;
       }
 
-      const productsToReturn = order.products
-        .filter((_, idx) => selectedProductIndices.includes(idx))
-        .map((item, idx) => ({
-          ...item,
-          quantity: selectedReturnQuantities[order._id]?.[idx] || item.quantity || 1,
-          smart_checks: item.smart_checks || [],
-          uploadedImageUrl: item.uploadedImageUrl || "",
-          imageUrl: item.imageUrl || "",
-        }));
-
-      const payload = {
-        shopifyId: order.shopifyId,
-        orderId: order.orderId,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        customerEmail: order.customerEmail,
-        customerAddress: order.customerAddress,
-        city: order.city,
-        state: order.state,
-        pincode: order.pincode,
-        products: productsToReturn,
-        deadWeight: order.deadWeight,
-        length: order.length,
-        breadth: order.breadth,
-        height: order.height,
-        volumetricWeight: order.volumetricWeight,
-        amount: order.amount,
-        paymentMode: order.paymentMode,
-        hsnCode: order.hsnCode || order.hsn || "",
-        invoiceReference: order.invoiceReference || order.invoiceId || "",
-        destinationName: order.destinationName || "",
-        destinationAddressLine1: order.destinationAddressLine1 || "",
-        destinationAddressLine2: order.destinationAddressLine2 || "",
-        destinationCity: order.destinationCity || "",
-        destinationState: order.destinationState || "",
-        destinationPincode: order.destinationPincode || "",
-        destinationPhone: order.destinationPhone || "",
-      };
-
-      const response = await axios.post(`${API_URL}/api/ekart/return`, payload);
-
-      if (!response.data?.success) {
-        const errorMsg =
-          response.data?.message ||
-          response.data?.details?.message ||
-          response.data?.customerMessage ||
-          "Unknown error occurred";
-
-        toast.error(`❌ Return Failed:\n${errorMsg}`, { autoClose: 5000 });
-        setLoadingReturnId(null);
-        return;
-      }
-
-      const trackingId = response.data.trackingId;
-      const updatedOrderFromBackend = response.data.order;
-      const newStatus = response.data.orderStatus || updatedOrderFromBackend?.status;
-
-      if (!updatedOrderFromBackend) {
-        throw new Error("Backend response missing updated order data");
-      }
-
-      setLocalOrders((prev) =>
-        prev.map((o) => {
-          if (o._id === order._id) {
-            return {
-              ...updatedOrderFromBackend,
-              status: newStatus,
-              trackingLoading: false,
-              updatedAt: new Date().toISOString(),
-            };
-          }
-          return o;
-        })
-      );
-
-      setSelectedProductsPerOrder((prev) => {
-        const updated = { ...prev };
-        delete updated[order._id];
-        return updated;
-      });
-
-      toast.success(
-        `✅ Return Successfully Created!\nOrder: ${order.orderId}\nTracking ID: ${trackingId}\nStatus: ${newStatus}`,
-        { autoClose: 5000 }
-      );
-
-      setTimeout(() => {
-        if (onOrderUpdate) {
-          onOrderUpdate();
-        }
-      }, 1000);
-
-    } catch (err) {
-      const errorMessage =
-        err.response?.data?.message ||
-        err.response?.data?.details?.message ||
-        err.response?.data?.error ||
-        err.response?.data?.customerMessage ||
-        err.message ||
-        "Error processing return request";
-
-      toast.error(`❌ Return Failed:\n${errorMessage}`, { autoClose: 5000 });
-
-    } finally {
-      setLoadingReturnId(null);
-    }
-  };
-
-  const handleBulkReturn = async () => {
-    if (selectedOrderIds.length === 0) {
-      toast.warning("⚠️ Please select orders to return");
-      return;
-    }
-
-    const confirmMessage = `Are you sure you want to process return requests for ${selectedOrderIds.length} orders?`;
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
-
-    setLoadingReturnId("bulk");
-
-    try {
-      const ordersToReturn = localOrders.filter((o) => selectedOrderIds.includes(o._id));
       let successCount = 0;
       let errorCount = 0;
+      let totalShipmentsCreated = 0;
 
-      for (const order of ordersToReturn) {
-        try {
-          const selectedProductIndices = selectedProductsPerOrder[order._id] || [];
-          if (selectedProductIndices.length === 0) {
-            errorCount++;
-            continue;
-          }
+      // ✅ NEW: Loop through selected products and create return for EACH quantity
+      for (const productIdx of selectedProductIndices) {
+        const item = order.products[productIdx];
+        const selectedQty = selectedReturnQuantities[order._id]?.[productIdx] || 1;
 
-          const productsToReturn = order.products.filter((_, idx) =>
-            selectedProductIndices.includes(idx)
-          );
+        // ✅ Create a return request for EACH item (quantity = 1 each time for Ekart)
+        for (let i = 0; i < selectedQty; i++) {
+          const productsToReturn = [{
+            ...item,
+            quantity: 1, // ✅ Always 1 per Ekart shipment
+            smart_checks: item.smart_checks || [],
+            uploadedImageUrl: item.uploadedImageUrl || "",
+            imageUrl: item.imageUrl || "",
+          }];
 
           const payload = {
             shopifyId: order.shopifyId,
@@ -533,10 +413,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             city: order.city,
             state: order.state,
             pincode: order.pincode,
-            products: productsToReturn.map((item) => ({
-              ...item,
-              smart_checks: item.smart_checks || [],
-            })),
+            products: productsToReturn,
             deadWeight: order.deadWeight,
             length: order.length,
             breadth: order.breadth,
@@ -555,28 +432,219 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
             destinationPhone: order.destinationPhone || "",
           };
 
-          const response = await axios.post(`${API_URL}/api/ekart/return`, payload);
+          try {
+            const response = await axios.post(`${API_URL}/api/ekart/return`, payload);
 
-          if (response.data?.success) {
-            const updatedOrderFromBackend = response.data.order;
+            if (response.data?.success) {
+              successCount++;
+              totalShipmentsCreated++;
+              console.log(`✅ Return ${i + 1}/${selectedQty} created for ${item.productName}`);
+            } else {
+              errorCount++;
+              console.error(`❌ Return ${i + 1}/${selectedQty} failed for ${item.productName}`);
+            }
+          } catch (itemError) {
+            errorCount++;
+            console.error(
+              `❌ Return ${i + 1}/${selectedQty} error for ${item.productName}:`,
+              itemError.response?.data?.message || itemError.message
+            );
+          }
+        }
+      }
 
+      // Update order if ANY shipment succeeded
+      if (successCount > 0) {
+        setLocalOrders((prev) =>
+          prev.map((o) =>
+            o._id === order._id
+              ? {
+                  ...o,
+                  status: "RETURN_REQUESTED",
+                  trackingLoading: false,
+                  updatedAt: new Date().toISOString(),
+                }
+              : o
+          )
+        );
+
+        setSelectedProductsPerOrder((prev) => {
+          const updated = { ...prev };
+          delete updated[order._id];
+          return updated;
+        });
+
+        // ✅ Clear quantities after successful return
+        setSelectedReturnQuantities((prev) => {
+          const updated = { ...prev };
+          delete updated[order._id];
+          return updated;
+        });
+
+        toast.success(
+          `✅ Created ${totalShipmentsCreated} return shipment(s) for ${order.orderId}!`,
+          { autoClose: 5000 }
+        );
+      }
+
+      // Show error if some failed
+      if (errorCount > 0) {
+        if (successCount > 0) {
+          toast.warning(
+            `⚠️ Created ${successCount} returns, but ${errorCount} failed. You can retry.`,
+            { autoClose: 5000 }
+          );
+        } else {
+          toast.error(
+            `❌ All ${errorCount} return attempts failed. Please try again.`,
+            { autoClose: 5000 }
+          );
+        }
+      }
+
+      setTimeout(() => {
+        if (onOrderUpdate) {
+          onOrderUpdate();
+        }
+      }, 1000);
+    } catch (err) {
+      const errorMessage =
+        err.response?.data?.message ||
+        err.response?.data?.details?.message ||
+        err.response?.data?.error ||
+        err.response?.data?.customerMessage ||
+        err.message ||
+        "Error processing return request";
+
+      toast.error(`❌ Return Failed: ${errorMessage}`, { autoClose: 5000 });
+    } finally {
+      setLoadingReturnId(null);
+    }
+  };
+
+  // ✅ FIXED: handleBulkReturn with multiple shipments support
+  const handleBulkReturn = async () => {
+    if (selectedOrderIds.length === 0) {
+      toast.warning("⚠️ Please select orders to return");
+      return;
+    }
+
+    const confirmMessage = `Are you sure you want to process return requests for ${selectedOrderIds.length} orders?`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setLoadingReturnId("bulk");
+
+    try {
+      const ordersToReturn = localOrders.filter((o) => selectedOrderIds.includes(o._id));
+      let totalSuccessCount = 0;
+      let totalErrorCount = 0;
+
+      for (const order of ordersToReturn) {
+        try {
+          const selectedProductIndices = selectedProductsPerOrder[order._id] || [];
+          if (selectedProductIndices.length === 0) {
+            totalErrorCount++;
+            continue;
+          }
+
+          let successCount = 0;
+          let errorCount = 0;
+
+          // ✅ NEW: Create return for each selected product with quantity support
+          for (const productIdx of selectedProductIndices) {
+            const item = order.products[productIdx];
+            const selectedQty = selectedReturnQuantities[order._id]?.[productIdx] || 1;
+
+            // Create a return request for EACH quantity (Ekart only allows qty 1 per shipment)
+            for (let i = 0; i < selectedQty; i++) {
+              const productsToReturn = [{
+                ...item,
+                quantity: 1, // ✅ Ekart constraint: always 1
+                smart_checks: item.smart_checks || [],
+                uploadedImageUrl: item.uploadedImageUrl || "",
+                imageUrl: item.imageUrl || "",
+              }];
+
+              const payload = {
+                shopifyId: order.shopifyId,
+                orderId: order.orderId,
+                customerName: order.customerName,
+                customerPhone: order.customerPhone,
+                customerEmail: order.customerEmail,
+                customerAddress: order.customerAddress,
+                city: order.city,
+                state: order.state,
+                pincode: order.pincode,
+                products: productsToReturn,
+                deadWeight: order.deadWeight,
+                length: order.length,
+                breadth: order.breadth,
+                height: order.height,
+                volumetricWeight: order.volumetricWeight,
+                amount: order.amount,
+                paymentMode: order.paymentMode,
+                hsnCode: order.hsnCode || order.hsn || "",
+                invoiceReference: order.invoiceReference || order.invoiceId || "",
+                destinationName: order.destinationName || "",
+                destinationAddressLine1: order.destinationAddressLine1 || "",
+                destinationAddressLine2: order.destinationAddressLine2 || "",
+                destinationCity: order.destinationCity || "",
+                destinationState: order.destinationState || "",
+                destinationPincode: order.destinationPincode || "",
+                destinationPhone: order.destinationPhone || "",
+              };
+
+              try {
+                const response = await axios.post(`${API_URL}/api/ekart/return`, payload);
+
+                if (response.data?.success) {
+                  successCount++;
+                } else {
+                  errorCount++;
+                }
+              } catch (itemError) {
+                errorCount++;
+              }
+            }
+          }
+
+          // Update order if at least one return succeeded
+          if (successCount > 0) {
             setLocalOrders((prev) =>
               prev.map((o) =>
-                o._id === order._id ? { ...updatedOrderFromBackend, trackingLoading: false } : o
+                o._id === order._id
+                  ? {
+                      ...o,
+                      status: "RETURN_REQUESTED",
+                      trackingLoading: false,
+                      updatedAt: new Date().toISOString(),
+                    }
+                  : o
               )
             );
 
-            successCount++;
+            totalSuccessCount += successCount;
+
             setSelectedProductsPerOrder((prev) => {
               const updated = { ...prev };
               delete updated[order._id];
               return updated;
             });
+
+            // ✅ Clear quantities after successful bulk return
+            setSelectedReturnQuantities((prev) => {
+              const updated = { ...prev };
+              delete updated[order._id];
+              return updated;
+            });
           } else {
-            errorCount++;
+            totalErrorCount++;
           }
         } catch (orderError) {
-          errorCount++;
+          console.error("Bulk return order error:", orderError);
+          totalErrorCount++;
         }
       }
 
@@ -586,17 +654,20 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
       setSelectedOrderIds([]);
 
-      if (successCount > 0) {
-        toast.success(`✅ Successfully processed ${successCount} return requests`, {
-          autoClose: 5000,
-        });
+      if (totalSuccessCount > 0) {
+        toast.success(
+          `✅ Successfully created ${totalSuccessCount} return shipment(s) across selected orders`,
+          { autoClose: 5000 }
+        );
       }
-      if (errorCount > 0) {
-        toast.error(`❌ Failed to process ${errorCount} return requests`, {
-          autoClose: 5000,
-        });
+      if (totalErrorCount > 0) {
+        toast.error(
+          `⚠️ Some return shipments failed (${totalErrorCount}). You can retry by clicking the Return button again.`,
+          { autoClose: 5000 }
+        );
       }
     } catch (err) {
+      console.error("Bulk return error:", err);
       toast.error("❌ Bulk return operation failed", { autoClose: 5000 });
     } finally {
       setLoadingReturnId(null);
@@ -987,25 +1058,34 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
                   <td className="action-cell">
                     <div style={{ display: "flex", gap: "4px" }}>
+                      {/* ✅ FIXED: Return button ALWAYS clickable */}
                       <button
                         style={{
-                          backgroundColor: order.status === "RETURN_REQUESTED" ? "#d1d5db" : "#ea580c",
+                          backgroundColor: "#ea580c",
                           color: "white",
                           padding: "6px 12px",
                           borderRadius: "4px",
                           border: "none",
-                          cursor: order.status === "RETURN_REQUESTED" ? "not-allowed" : "pointer",
+                          cursor: loadingReturnId === order._id ? "not-allowed" : "pointer",
                           fontSize: "13px",
+                          opacity: loadingReturnId === order._id ? 0.7 : 1,
+                          transition: "all 0.2s ease",
                         }}
                         onClick={() => handleReturnClick(order)}
-                        disabled={loadingReturnId === order._id || order.status === "RETURN_REQUESTED"}
+                        disabled={loadingReturnId === order._id}
+                        title={
+                          order.status === "RETURN_REQUESTED"
+                            ? "Retry return (previous attempt was made)"
+                            : "Create new return request"
+                        }
                       >
-                        {loadingReturnId === order._id
-                          ? "⏳"
+                        {loadingReturnId === order._id 
+                          ? "⏳ Processing..." 
                           : order.status === "RETURN_REQUESTED"
-                            ? "✅ Returned"
+                            ? "🔄 Retry Return"
                             : "🔄 Return"}
                       </button>
+
                       <button
                         style={{
                           backgroundColor: "#e5e7eb",
