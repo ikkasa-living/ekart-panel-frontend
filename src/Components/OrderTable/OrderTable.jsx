@@ -306,6 +306,47 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
     }
   };
 
+  // ✅ DELETE ORDER FUNCTION
+  const handleDeleteOrder = async (orderId, orderNumber) => {
+    // Confirmation dialog
+    const confirmed = window.confirm(
+      `⚠️ Are you sure you want to delete Order #${orderNumber}?\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setLoadingReturnId(orderId); // Reuse for delete loading state
+
+      const response = await axios.delete(`${API_URL}/api/orders/${orderId}`);
+
+      if (response.status === 200) {
+        // Remove from local state
+        setLocalOrders((prev) => prev.filter((order) => order._id !== orderId));
+
+        toast.success(`✅ Order #${orderNumber} deleted successfully`);
+
+        // Notify parent component if needed
+        if (onAction) {
+          onAction("delete", { orderId, orderNumber });
+        }
+
+        // Call parent refresh if needed
+        if (onOrderUpdate) {
+          setTimeout(() => {
+            onOrderUpdate();
+          }, 500);
+        }
+      }
+    } catch (error) {
+      console.error("Delete error:", error);
+      const errorMsg = error.response?.data?.error || "Failed to delete order";
+      toast.error(`❌ ${errorMsg}`);
+    } finally {
+      setLoadingReturnId(null);
+    }
+  };
+
   const handleFileUpload = async (file, orderId, productIndex) => {
     try {
       const previewUrl = URL.createObjectURL(file);
@@ -395,13 +436,15 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
         // ✅ Create a return request for EACH item (quantity = 1 each time for Ekart)
         for (let i = 0; i < selectedQty; i++) {
-          const productsToReturn = [{
-            ...item,
-            quantity: 1, // ✅ Always 1 per Ekart shipment
-            smart_checks: item.smart_checks || [],
-            uploadedImageUrl: item.uploadedImageUrl || "",
-            imageUrl: item.imageUrl || "",
-          }];
+          const productsToReturn = [
+            {
+              ...item,
+              quantity: 1, // ✅ Always 1 per Ekart shipment
+              smart_checks: item.smart_checks || [],
+              uploadedImageUrl: item.uploadedImageUrl || "",
+              imageUrl: item.imageUrl || "",
+            },
+          ];
 
           const payload = {
             shopifyId: order.shopifyId,
@@ -441,7 +484,9 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
               console.log(`✅ Return ${i + 1}/${selectedQty} created for ${item.productName}`);
             } else {
               errorCount++;
-              console.error(`❌ Return ${i + 1}/${selectedQty} failed for ${item.productName}`);
+              console.error(
+                `❌ Return ${i + 1}/${selectedQty} failed for ${item.productName}`
+              );
             }
           } catch (itemError) {
             errorCount++;
@@ -559,13 +604,15 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
 
             // Create a return request for EACH quantity (Ekart only allows qty 1 per shipment)
             for (let i = 0; i < selectedQty; i++) {
-              const productsToReturn = [{
-                ...item,
-                quantity: 1, // ✅ Ekart constraint: always 1
-                smart_checks: item.smart_checks || [],
-                uploadedImageUrl: item.uploadedImageUrl || "",
-                imageUrl: item.imageUrl || "",
-              }];
+              const productsToReturn = [
+                {
+                  ...item,
+                  quantity: 1, // ✅ Ekart constraint: always 1
+                  smart_checks: item.smart_checks || [],
+                  uploadedImageUrl: item.uploadedImageUrl || "",
+                  imageUrl: item.imageUrl || "",
+                },
+              ];
 
               const payload = {
                 shopifyId: order.shopifyId,
@@ -957,7 +1004,14 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                         <div className="tracking-info">
                           <div className="tracking-id">
                             <strong>Tracking:</strong>
-                            <code style={{ fontSize: "11px", backgroundColor: "#f3f4f6", padding: "1px 4px", borderRadius: "3px" }}>
+                            <code
+                              style={{
+                                fontSize: "11px",
+                                backgroundColor: "#f3f4f6",
+                                padding: "1px 4px",
+                                borderRadius: "3px",
+                              }}
+                            >
                               {order.returnTracking.ekartTrackingId}
                             </code>
                           </div>
@@ -996,7 +1050,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                                   padding: "6px 12px",
                                   borderRadius: "4px",
                                   border: "none",
-                                  cursor: loadingReturnId === `retry-${order._id}` ? "not-allowed" : "pointer",
+                                  cursor:
+                                    loadingReturnId === `retry-${order._id}` ? "not-allowed" : "pointer",
                                   fontSize: "13px",
                                   fontWeight: "500",
                                 }}
@@ -1005,30 +1060,18 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                                   ? "⏳ Rescheduling..."
                                   : "🔄 Reschedule Pickup"}
                               </button>
-                              <p style={{ fontSize: "11px", color: "#666", marginTop: "4px", margin: "4px 0 0 0" }}>
+                              <p
+                                style={{
+                                  fontSize: "11px",
+                                  color: "#666",
+                                  marginTop: "4px",
+                                  margin: "4px 0 0 0",
+                                }}
+                              >
                                 Ekart will schedule new pickup
                               </p>
                             </div>
                           )}
-
-                          {!shouldShowRetryButton(order) && (
-                            <button
-                              onClick={() => refreshTracking(order.orderId)}
-                              disabled={order.trackingLoading}
-                              style={{
-                                marginTop: "6px",
-                                padding: "4px 8px",
-                                fontSize: "12px",
-                                backgroundColor: "#dbeafe",
-                                border: "1px solid #93c5fd",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                              }}
-                            >
-                              {order.trackingLoading ? "⏳" : "🔄"} Refresh
-                            </button>
-                          )}
-
                           {order.returnTracking.history && order.returnTracking.history.length > 0 && (
                             <details style={{ marginTop: "6px" }}>
                               <summary style={{ fontSize: "12px", cursor: "pointer" }}>
@@ -1036,7 +1079,14 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                               </summary>
                               <div style={{ fontSize: "11px", marginTop: "4px" }}>
                                 {order.returnTracking.history.slice(0, 5).map((h, i) => (
-                                  <div key={i} style={{ marginBottom: "4px", paddingLeft: "8px", borderLeft: "2px solid #e5e7eb" }}>
+                                  <div
+                                    key={i}
+                                    style={{
+                                      marginBottom: "4px",
+                                      paddingLeft: "8px",
+                                      borderLeft: "2px solid #e5e7eb",
+                                    }}
+                                  >
                                     <div>{h.status}</div>
                                     <div>{formatDateTime(h.timestamp)}</div>
                                     {h.city && <div>📍 {h.city}</div>}
@@ -1057,8 +1107,8 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                   </td>
 
                   <td className="action-cell">
-                    <div style={{ display: "flex", gap: "4px" }}>
-                      {/* ✅ FIXED: Return button ALWAYS clickable */}
+                    <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                      {/* ✅ RETURN BUTTON */}
                       <button
                         style={{
                           backgroundColor: "#ea580c",
@@ -1070,6 +1120,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                           fontSize: "13px",
                           opacity: loadingReturnId === order._id ? 0.7 : 1,
                           transition: "all 0.2s ease",
+                          whiteSpace: "nowrap",
                         }}
                         onClick={() => handleReturnClick(order)}
                         disabled={loadingReturnId === order._id}
@@ -1079,13 +1130,39 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                             : "Create new return request"
                         }
                       >
-                        {loadingReturnId === order._id 
-                          ? "⏳ Processing..." 
+                        {loadingReturnId === order._id
+                          ? "⏳ Processing..."
                           : order.status === "RETURN_REQUESTED"
-                            ? "🔄 Retry Return"
-                            : "🔄 Return"}
+                          ? "🔄 Retry Return"
+                          : "🔄 Return"}
                       </button>
 
+                      {/* ✅ DELETE BUTTON */}
+                      <button
+                        style={{
+                          backgroundColor: "#ff4444",
+                          color: "white",
+                          padding: "6px 12px",
+                          borderRadius: "4px",
+                          border: "none",
+                          cursor: loadingReturnId === order._id ? "not-allowed" : "pointer",
+                          fontSize: "13px",
+                          opacity: loadingReturnId === order._id ? 0.7 : 1,
+                          transition: "all 0.2s ease",
+                          whiteSpace: "nowrap",
+                        }}
+                        onClick={() =>
+                          handleDeleteOrder(order._id, order.orderId)
+                        }
+                        disabled={loadingReturnId === order._id}
+                        title="Delete this order from database"
+                      >
+                        {loadingReturnId === order._id
+                          ? "⏳ Deleting..."
+                          : "🗑️ Delete"}
+                      </button>
+
+                      {/* ✅ MORE OPTIONS MENU */}
                       <button
                         style={{
                           backgroundColor: "#e5e7eb",
@@ -1093,6 +1170,7 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
                           borderRadius: "4px",
                           border: "none",
                           cursor: "pointer",
+                          fontSize: "16px",
                         }}
                         onClick={(e) => {
                           const rect = e.target.getBoundingClientRect();
@@ -1125,7 +1203,10 @@ export default function OrderTable({ orders, onAction, onOrderUpdate, loading = 
           <span className="page-info">
             Page {currentPage} of {totalPages}
           </span>
-          <button disabled={currentPage === totalPages} onClick={() => setCurrentPage((p) => p + 1)}>
+          <button
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage((p) => p + 1)}
+          >
             Next ▶
           </button>
           <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(totalPages)}>
